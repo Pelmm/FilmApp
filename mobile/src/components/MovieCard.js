@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import colors from '../styles/colors';
+import fonts from '../styles/fonts';
 
 export default function MovieCard({ movie }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -50,12 +52,12 @@ export default function MovieCard({ movie }) {
 }
 
 const styles = StyleSheet.create({
-  card: { flexDirection: 'row', padding: 12, marginBottom: 12, borderRadius: 12, backgroundColor: '#172033' },
-  poster: { width: 88, height: 132, borderRadius: 6, backgroundColor: '#263249' },
+  card: { flexDirection: 'row', padding: 12, marginBottom: 12, borderRadius: 12, backgroundColor: colors.card },
+  poster: { width: 88, height: 132, borderRadius: 6, backgroundColor: colors.border },
   placeholder: { alignItems: 'center', justifyContent: 'center', padding: 8 },
-  placeholderText: { color: '#c0cadb', textAlign: 'center', fontSize: 12 },
+  placeholderText: { color: colors.secondaryText, textAlign: 'center', fontSize: fonts.sizes.small },
   info: { flex: 1, justifyContent: 'center', marginLeft: 16 },
-  title: { color: '#f5f7fb', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-  year: { color: '#c0cadb', fontSize: 14, marginBottom: 12 },
-  rating: { color: '#f5c563', fontSize: 14 },
+  title: { color: colors.primaryText, fontSize: fonts.sizes.cardTitle, fontWeight: fonts.weights.bold, marginBottom: 8 },
+  year: { color: colors.secondaryText, fontSize: fonts.sizes.caption, marginBottom: 12 },
+  rating: { color: colors.accent, fontSize: fonts.sizes.caption },
 });

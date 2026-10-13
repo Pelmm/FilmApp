@@ -1,24 +1,19 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import globalStyles from '../styles/globalStyles';
 
 export default function MovieDetailsScreen({ route }) {
   // Framtida navigation: navigate('MovieDetails', { movieId: filmensId }).
   const movieId = route.params?.movieId;
   let movieIdInfo = null;
   if (movieId !== undefined) {
-    movieIdInfo = <Text style={styles.message}>Film-ID: {movieId}</Text>;
+    movieIdInfo = <Text style={globalStyles.text}>Film-ID: {movieId}</Text>;
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Filmdetaljer</Text>
-      <Text style={styles.message}>Här kommer filminformation och recensioner att visas.</Text>
+    <View style={globalStyles.placeholderContainer}>
+      <Text style={globalStyles.title}>Filmdetaljer</Text>
+      <Text style={globalStyles.text}>Här kommer filminformation och recensioner att visas.</Text>
       {movieIdInfo}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b1020', padding: 24, justifyContent: 'center' },
-  title: { color: '#f5f7fb', fontSize: 26, fontWeight: 'bold', marginBottom: 16 },
-  message: { color: '#c0cadb', fontSize: 16, lineHeight: 24 },
-});

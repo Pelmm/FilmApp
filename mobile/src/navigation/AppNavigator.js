@@ -8,6 +8,9 @@ import SearchScreen from '../screens/SearchScreen';
 import MovieDetailsScreen from '../screens/MovieDetailsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import colors from '../styles/colors';
+import fonts from '../styles/fonts';
+import globalStyles from '../styles/globalStyles';
 
 const Stack = createNativeStackNavigator();
 
@@ -38,13 +41,13 @@ export default function AppNavigator() {
       onReady={updateCurrentScreen}
       onStateChange={updateCurrentScreen}
     >
-      <View style={styles.container}>
+      <View style={globalStyles.container}>
         <View style={styles.screenArea}>
           <Stack.Navigator
             screenOptions={{
-              headerStyle: { backgroundColor: '#0b1020' },
-              headerTintColor: '#f5f7fb',
-              contentStyle: { backgroundColor: '#0b1020' },
+              headerStyle: { backgroundColor: colors.background },
+              headerTintColor: colors.primaryText,
+              contentStyle: { backgroundColor: colors.background },
             }}
           >
             <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'FilmApp' }} />
@@ -90,12 +93,11 @@ export default function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b1020' },
   // Stacken får återstående höjd; navigationsraden får behålla sin egen höjd.
   screenArea: { flex: 1 },
-  bottomArea: { flexShrink: 0, backgroundColor: '#0b1020', borderTopWidth: 1, borderTopColor: '#263249' },
+  bottomArea: { flexShrink: 0, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
   navigationRow: { flexDirection: 'row' },
   navigationButton: { flex: 1, minHeight: 52, padding: 8, alignItems: 'center', justifyContent: 'center' },
-  label: { color: '#c0cadb', fontSize: 12, fontWeight: '600', textAlign: 'center' },
-  selected: { color: '#f5c563' },
+  label: { color: colors.secondaryText, fontSize: fonts.sizes.small, fontWeight: fonts.weights.semibold, textAlign: 'center' },
+  selected: { color: colors.accent },
 });
