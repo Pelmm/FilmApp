@@ -1,0 +1,16 @@
+# Lokala verktyg och operativsystem
+.cache/
+.DS_Store
+Thumbs.db
+*.log
+
+# Hemligheter: exempelmallar ska versionshanteras
+.env
+.env.*
+!.env.example
+
+# Beroenden och genererade filer i hela monorepot
+node_modules/
+.expo/
+dist/
+coverage/
