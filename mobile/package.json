@@ -1,6 +1,7 @@
 {
   "name": "filmapp-mobile",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
@@ -22,7 +23,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "check": "expo install --check",
-    "export:check": "expo export --platform all --output-dir dist"
+    "export:check": "expo export --platform all --output-dir dist",
+    "test": "node --test test/*.test.mjs"
   },
   "private": true,
   "engines": {
