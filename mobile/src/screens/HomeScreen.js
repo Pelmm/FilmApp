@@ -1,30 +1,38 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, StyleSheet, Text, View } from 'react-native';
-import { getHealth } from '../services/api';
+import { ActivityIndicator, Button, FlatList, StyleSheet, Text, View } from 'react-native';
+import { getPopularMovies } from '../services/api';
+import MovieCard from '../components/MovieCard';
 
 export default function HomeScreen() {
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState({ loading: true, data: null, error: null });
+  const [movies, setMovies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
 
-    async function checkHealth() {
-      setState({ loading: true, data: null, error: null });
+    async function loadMovies() {
+      setLoading(true);
+      setError('');
       try {
-        const data = await getHealth({ signal: controller.signal });
-        if (active) setState({ loading: true, data, error: null });
+        const data = await getPopularMovies(1, { signal: controller.signal });
+        if (active) {
+          setMovies(data.results);
+        }
       } catch (error) {
-        if (active && error.name !== 'AbortError') {
-          setState({ loading: true, data: null, error: error.message });
+        if (active) {
+          setError(error.message);
         }
       } finally {
-        if (active) setState((current) => ({ ...current, loading: false }));
+        if (active) {
+          setLoading(false);
+        }
       }
     }
 
-    checkHealth();
+    loadMovies();
 
     // Avbryt både nätverksanropet och framtida state-uppdateringar.
     return () => {
@@ -33,36 +41,48 @@ export default function HomeScreen() {
     };
   }, [attempt]);
 
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.status} accessibilityLiveRegion="polite">
+          <ActivityIndicator size="large" color="#f5c563" accessibilityLabel="Hämtar filmer" />
+          <Text style={styles.message}>Hämtar filmer…</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.status} accessibilityLiveRegion="polite">
+          <Text style={styles.message}>{error}</Text>
+          <Button title="Försök igen" color="#f5c563" onPress={() => setAttempt((current) => current + 1)} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>FilmApp</Text>
-      <View style={styles.status} accessibilityLiveRegion="polite">
-        {state.loading ? (
-          <>
-            <ActivityIndicator size="large" accessibilityLabel="Kontrollerar anslutningen till servern" />
-            <Text style={styles.message}>Kontrollerar anslutningen till servern…</Text>
-          </>
-        ) : state.error ? (
-          <>
-            <Text style={[styles.message, styles.error]}>{state.error}</Text>
-            <Button title="Försök igen" onPress={() => setAttempt((current) => current + 1)} />
-          </>
-        ) : (
-          <>
-            <Text style={[styles.message, styles.success]}>Ansluten till backend.</Text>
-            <Text>Serverstatus: {state.data.status}</Text>
-          </>
-        )}
-      </View>
+      <FlatList
+        data={movies}
+        keyExtractor={(movie) => String(movie.id)}
+        renderItem={({ item }) => <MovieCard movie={item} />}
+        contentContainerStyle={styles.list}
+        ListHeaderComponent={<Text style={styles.title}>Populära filmer</Text>}
+        ListEmptyComponent={<Text style={styles.message}>Inga filmer hittades</Text>}
+        ListFooterComponent={<Text style={styles.credit}>Filmdata från TMDB</Text>}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', padding: 24 },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 12 },
-  status: { alignItems: 'center', width: '100%', maxWidth: 420 },
-  message: { textAlign: 'center', marginVertical: 16, fontSize: 16 },
-  error: { color: '#b42318' },
-  success: { color: '#146c2e' },
+  container: { flex: 1, backgroundColor: '#0b1020' },
+  list: { padding: 16, width: '100%', maxWidth: 640, alignSelf: 'center' },
+  title: { color: '#f5f7fb', fontSize: 26, fontWeight: 'bold', marginBottom: 20 },
+  status: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  message: { color: '#c0cadb', textAlign: 'center', marginVertical: 16, fontSize: 16 },
+  credit: { color: '#c0cadb', textAlign: 'center', fontSize: 12, marginVertical: 16 },
 });
