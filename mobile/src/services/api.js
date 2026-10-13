@@ -1,81 +1,134 @@
 const REQUEST_TIMEOUT_MS = 10000;
 
-export class ApiError extends Error {
-  constructor(message, code) {
-    super(message);
-    this.name = 'ApiError';
-    this.code = code;
-  }
-}
-
 export function getApiUrl(path, baseUrl = process.env.EXPO_PUBLIC_API_URL) {
-  if (typeof baseUrl !== 'string' || !baseUrl.trim()) {
-    throw new ApiError('Backendadressen saknas. Ange EXPO_PUBLIC_API_URL i mobile/.env och ladda om appen.', 'CONFIG');
+  if (
+    typeof baseUrl !== 'string' ||
+    !baseUrl.trim()
+  ) {
+    throw new Error('Backendadressen saknas. Ange EXPO_PUBLIC_API_URL i mobile/.env och ladda om appen.');
   }
 
+  let url;
   try {
-    const url = new URL(baseUrl.trim());
-    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.search || url.hash) {
-      throw new Error('Invalid backend URL');
+    url = new URL(baseUrl.trim());
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error();
     }
-    return `${url.toString().replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      throw new Error();
+    }
   } catch {
-    throw new ApiError('Backendadressen är ogiltig. EXPO_PUBLIC_API_URL ska vara en HTTP- eller HTTPS-adress utan inloggningsuppgifter, query eller fragment.', 'CONFIG');
+    throw new Error('Backendadressen är ogiltig. EXPO_PUBLIC_API_URL ska vara en HTTP- eller HTTPS-adress utan inloggningsuppgifter, query eller fragment.');
   }
+
+  let address = url.toString();
+  while (address.endsWith('/')) {
+    address = address.slice(0, -1);
+  }
+  while (path.startsWith('/')) {
+    path = path.slice(1);
+  }
+  return `${address}/${path}`;
 }
 
-export async function getHealth({ signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
-  const url = getApiUrl('health');
+async function getJson(path, { signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+  const url = getApiUrl(path);
   const controller = new AbortController();
   const abortRequest = () => controller.abort();
-  let timedOut = false;
-
   signal?.addEventListener('abort', abortRequest);
-  if (signal?.aborted) controller.abort();
-
-  const timeout = setTimeout(() => {
-    timedOut = true;
+  if (signal?.aborted) {
     controller.abort();
-  }, timeoutMs);
+  }
+  const timeout = setTimeout(abortRequest, timeoutMs);
+  let response;
+  let data;
 
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     });
+    data = await response.json();
 
-    // fetch avvisar nätverksfel, men HTTP-fel måste vi kontrollera själva.
     if (!response.ok) {
-      throw new ApiError(`Servern svarade med HTTP ${response.status}. Försök igen.`, 'HTTP');
+      if (typeof data?.error === 'string') {
+        throw new Error(data.error);
+      }
+      throw new Error(`Servern svarade med HTTP ${response.status}. Försök igen.`);
     }
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (error) {
-      if (controller.signal.aborted) throw error;
-      throw new ApiError('Servern skickade ett svar som inte är giltig JSON. Försök igen.', 'INVALID_JSON');
-    }
-
-    if (!data || typeof data !== 'object' || Array.isArray(data) || data.status !== 'ok') {
-      throw new ApiError('Serverns svar saknar förväntad status "ok". Försök igen.', 'INVALID_RESPONSE');
-    }
-
     return data;
   } catch (error) {
+    // Avmontering ska avbryta tyst; timeout ska ge ett begripligt fel.
     if (signal?.aborted) {
-      const abortError = new Error('Anropet avbröts.');
-      abortError.name = 'AbortError';
-      throw abortError;
+      throw error;
     }
-    if (timedOut) {
-      throw new ApiError('Servern svarade inte i tid. Kontrollera anslutningen och försök igen.', 'TIMEOUT');
+    if (controller.signal.aborted) {
+      throw new Error('Servern svarade inte i tid. Kontrollera anslutningen och försök igen.');
     }
-    if (error instanceof ApiError) throw error;
-    throw new ApiError('Kunde inte nå servern. Kontrollera att backend är igång och att backendadressen och nätverket stämmer. Försök igen.', 'NETWORK');
+    if (!response) {
+      throw new Error('Kunde inte nå servern. Kontrollera att backend är igång och att backendadressen och nätverket stämmer. Försök igen.');
+    }
+    if (data === undefined) {
+      if (!response.ok) {
+        throw new Error(`Servern svarade med HTTP ${response.status}. Försök igen.`);
+      }
+      throw new Error('Servern skickade ett svar som inte är giltig JSON. Försök igen.');
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', abortRequest);
   }
+}
+
+export async function getHealth(options) {
+  const data = await getJson('health', options);
+  if (data?.status !== 'ok') {
+    throw new Error('Serverns svar saknar förväntad status "ok". Försök igen.');
+  }
+  return data;
+}
+
+function checkMovieList(data) {
+  if (!Array.isArray(data?.results)) {
+    throw new Error('Servern skickade en ogiltig filmlista.');
+  }
+  return data;
+}
+
+export async function getPopularMovies(page = 1, options) {
+  const data = await getJson(`movies/popular?page=${encodeURIComponent(page)}`, options);
+  return checkMovieList(data);
+}
+
+export async function searchMovies(query, page = 1, options) {
+  if (
+    typeof query !== 'string' ||
+    !query.trim()
+  ) {
+    throw new Error('Ange ett sökord.');
+  }
+  const data = await getJson(`movies/search?query=${encodeURIComponent(query.trim())}&page=${encodeURIComponent(page)}`, options);
+  return checkMovieList(data);
+}
+
+export async function getMovieDetails(id, options) {
+  const movieId = Number(id);
+  if (
+    !Number.isSafeInteger(movieId) ||
+    movieId < 1
+  ) {
+    throw new Error('Film-ID måste vara ett positivt heltal.');
+  }
+  const data = await getJson(`movies/${encodeURIComponent(id)}`, options);
+  if (data?.id !== movieId) {
+    throw new Error('Servern skickade ogiltiga filmdetaljer.');
+  }
+  return data;
 }
