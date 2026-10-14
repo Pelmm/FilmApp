@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
 
 export default function MovieCard({ movie }) {
+  const navigation = useNavigation();
   const [imageFailed, setImageFailed] = useState(false);
   // Backend skickar redan kontrollerade värden. Här väljer vi bara visningstext.
   const title = movie.title || 'Titel saknas';
@@ -40,14 +42,19 @@ export default function MovieCard({ movie }) {
   }
 
   return (
-    <View style={styles.card}>
+    <Pressable
+      style={styles.card}
+      accessibilityRole="button"
+      accessibilityLabel={`Visa filmdetaljer för ${title}`}
+      onPress={() => navigation.navigate('MovieDetails', { movieId: movie.id })}
+    >
       {poster}
       <View style={styles.info}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.year}>{year}</Text>
         <Text style={styles.rating}>TMDB-betyg: {rating}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
