@@ -253,3 +253,19 @@ test('nätverksfel vid filmsökning ger ett begripligt fel', async (t) => {
     message: 'Kunde inte nå servern. Kontrollera att backend är igång och att backendadressen och nätverket stämmer. Försök igen.',
   });
 });
+
+test('ogiltiga film-ID avvisas före nätverksanropet', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch');
+  for (const id of [undefined, null, '', 0, -1, 1.5, 'abc', Number.MAX_SAFE_INTEGER + 1]) {
+    await assert.rejects(getMovieDetails(id), { message: 'Film-ID måste vara ett positivt heltal.' });
+  }
+  assert.equal(mock.mock.callCount(), 0);
+});
+
+test('filmdetaljer kan avbrytas när vald film ändras', async (t) => {
+  t.mock.method(globalThis, 'fetch', pendingFetch);
+  const controller = new AbortController();
+  const pending = getMovieDetails(157336, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+});
