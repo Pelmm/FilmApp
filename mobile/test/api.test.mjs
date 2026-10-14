@@ -232,3 +232,24 @@ test('serverns begripliga JSON-fel visas även för filmanrop', async (t) => {
     message: 'Filmen hittades inte.',
   });
 });
+
+test('tom söktext avvisas före nätverksanropet', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', () => { throw new Error('Unexpected fetch'); });
+  await assert.rejects(searchMovies('   '), { message: 'Ange ett sökord.' });
+  assert.equal(mock.mock.callCount(), 0);
+});
+
+test('filmsökning kan avbrytas när skärmen lämnas', async (t) => {
+  t.mock.method(globalThis, 'fetch', pendingFetch);
+  const controller = new AbortController();
+  const pending = searchMovies('Avatar', 1, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+});
+
+test('nätverksfel vid filmsökning ger ett begripligt fel', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => { throw new TypeError('Network request failed'); });
+  await assert.rejects(searchMovies('Avatar'), {
+    message: 'Kunde inte nå servern. Kontrollera att backend är igång och att backendadressen och nätverket stämmer. Försök igen.',
+  });
+});
