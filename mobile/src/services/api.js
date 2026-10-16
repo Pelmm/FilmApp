@@ -42,7 +42,12 @@ export function getApiUrl(path, baseUrl = process.env.EXPO_PUBLIC_API_URL) {
   return `${address}/${path}`;
 }
 
-async function getJson(path, { signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
+async function getJson(path, {
+  signal,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  method = 'GET',
+  body,
+} = {}) {
   const url = getApiUrl(path);
   const controller = new AbortController();
   const abortRequest = () => controller.abort();
@@ -56,12 +61,19 @@ async function getJson(path, { signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   let response;
   let data;
 
+  const request = {
+    method,
+    headers: { Accept: 'application/json' },
+    signal: controller.signal,
+  };
+
+  if (body !== undefined) {
+    request.headers['Content-Type'] = 'application/json';
+    request.body = JSON.stringify(body);
+  }
+
   try {
-    response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
+    response = await fetch(url, request);
     data = await response.json();
 
     if (!response.ok) {
@@ -153,4 +165,50 @@ export async function getMovieDetails(id, options) {
     throw new Error('Servern skickade ogiltiga filmdetaljer.');
   }
   return data;
+}
+
+function getAuthUser(data) {
+  if (
+    typeof data?.token !== 'string' ||
+    !data.token ||
+    typeof data?.user?.id !== 'string' ||
+    typeof data.user.username !== 'string' ||
+    typeof data.user.email !== 'string'
+  ) {
+    throw new Error('Servern skickade ett ogiltigt autentiseringssvar. Försök igen.');
+  }
+
+  // JWT behövs först i nästa steg. Skärmarna får endast användarinformation.
+  return {
+    id: data.user.id,
+    username: data.user.username,
+    email: data.user.email,
+  };
+}
+
+export async function registerUser({ username, email, password }, options) {
+  const data = await getJson('auth/register', {
+    ...options,
+    method: 'POST',
+    body: {
+      username: username.trim(),
+      email: email.trim(),
+      password,
+    },
+  });
+
+  return getAuthUser(data);
+}
+
+export async function loginUser({ email, password }, options) {
+  const data = await getJson('auth/login', {
+    ...options,
+    method: 'POST',
+    body: {
+      email: email.trim(),
+      password,
+    },
+  });
+
+  return getAuthUser(data);
 }
