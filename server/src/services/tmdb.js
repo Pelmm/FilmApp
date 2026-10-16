@@ -3,29 +3,37 @@ const TIMEOUT_MS = 8000;
 
 function tmdbError(message, status) {
   const error = new Error(message);
+
   error.status = status;
   return error;
 }
 
 async function fetchTmdb(path, params = {}) {
   const token = process.env.TMDB_ACCESS_TOKEN;
+
   if (!token?.trim()) {
     throw tmdbError('Filmtjänsten är inte konfigurerad på servern.', 500);
   }
 
   const url = new URL(`${TMDB_URL}/${path}`);
+
   url.searchParams.set('language', 'sv-SE');
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
     let response;
+
     try {
       response = await fetch(url, {
-        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`
+        },
         signal: controller.signal,
       });
     } catch {
@@ -46,6 +54,7 @@ async function fetchTmdb(path, params = {}) {
     }
 
     let data;
+
     try {
       data = await response.json();
     } catch {
@@ -77,7 +86,9 @@ function getPosterPath(value) {
   if (!value.startsWith('/')) {
     return null;
   }
+
   const filename = value.slice(1);
+
   if (!filename) {
     return null;
   }
@@ -98,7 +109,9 @@ function isValidReleaseDate(value) {
   if (typeof value !== 'string') {
     return false;
   }
+
   const date = new Date(value);
+
   if (Number.isNaN(date.getTime())) {
     return false;
   }
@@ -113,6 +126,7 @@ function movieSummary(movie) {
   ) {
     throw tmdbError('Filmtjänsten skickade ogiltig filmdata.', 502);
   }
+
   const summary = {
     id: movie.id,
     title: '',
@@ -120,6 +134,7 @@ function movieSummary(movie) {
     release_date: '',
     vote_average: null,
   };
+
   if (typeof movie.title === 'string') {
     summary.title = movie.title.trim();
   }
@@ -155,20 +170,29 @@ function movieList(data) {
 
 export async function getPopularMovies(page) {
   const data = await fetchTmdb('movie/popular', { page });
+
   return movieList(data);
 }
 
 export async function searchMovies(query, page) {
-  const data = await fetchTmdb('search/movie', { query, page, include_adult: false });
+  const data = await fetchTmdb('search/movie', {
+    query,
+    page,
+    include_adult: false
+  });
+
   return movieList(data);
 }
 
 export async function getMovieDetails(id) {
   const data = await fetchTmdb(`movie/${id}`);
+
   if (data.id !== id) {
     throw tmdbError('Filmtjänsten skickade ogiltig filmdata.', 502);
   }
+
   const details = movieSummary(data);
+
   details.overview = '';
   details.genres = [];
   details.runtime = null;
@@ -186,7 +210,10 @@ export async function getMovieDetails(id) {
       if (typeof genre.name !== 'string') {
         continue;
       }
-      details.genres.push({ id: genre.id, name: genre.name });
+      details.genres.push({
+        id: genre.id,
+        name: genre.name
+      });
     }
   }
   if (

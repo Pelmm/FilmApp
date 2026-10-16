@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, FlatList, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Button,
+  FlatList,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native';
 import { getPopularMovies } from '../services/api';
 import MovieCard from '../components/MovieCard';
 import colors from '../styles/colors';
@@ -21,6 +28,7 @@ export default function HomeScreen() {
       setError('');
       try {
         const data = await getPopularMovies(1, { signal: controller.signal });
+
         if (active) {
           setMovies(data.results);
         }
@@ -48,7 +56,11 @@ export default function HomeScreen() {
     return (
       <View style={globalStyles.container}>
         <View style={styles.status} accessibilityLiveRegion="polite">
-          <ActivityIndicator size="large" color={colors.accent} accessibilityLabel="Hämtar filmer" />
+          <ActivityIndicator
+            size="large"
+            color={colors.accent}
+            accessibilityLabel="Hämtar filmer"
+          />
           <Text style={styles.message}>Hämtar filmer…</Text>
         </View>
       </View>
@@ -60,7 +72,11 @@ export default function HomeScreen() {
       <View style={globalStyles.container}>
         <View style={styles.status} accessibilityLiveRegion="polite">
           <Text style={styles.message}>{error}</Text>
-          <Button title="Försök igen" color={colors.accent} onPress={() => setAttempt((current) => current + 1)} />
+          <Button
+            title="Försök igen"
+            color={colors.accent}
+            onPress={() => setAttempt((current) => current + 1)}
+          />
         </View>
       </View>
     );
@@ -73,7 +89,9 @@ export default function HomeScreen() {
         keyExtractor={(movie) => String(movie.id)}
         renderItem={({ item }) => <MovieCard movie={item} />}
         contentContainerStyle={styles.list}
-        ListHeaderComponent={<Text style={[globalStyles.title, styles.title]}>Populära filmer</Text>}
+        ListHeaderComponent={
+          <Text style={[globalStyles.title, styles.title]}>Populära filmer</Text>
+        }
         ListEmptyComponent={<Text style={styles.message}>Inga filmer hittades</Text>}
         ListFooterComponent={<Text style={styles.credit}>Filmdata från TMDB</Text>}
       />
@@ -82,9 +100,35 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  list: { padding: 16, width: '100%', maxWidth: 640, alignSelf: 'center' },
-  title: { marginBottom: 20 },
-  status: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  message: { color: colors.secondaryText, textAlign: 'center', marginVertical: 16, fontSize: fonts.sizes.normal },
-  credit: { color: colors.secondaryText, textAlign: 'center', fontSize: fonts.sizes.small, marginVertical: 16 },
+  list: {
+    padding: 16,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center'
+  },
+
+  title: {
+    marginBottom: 20
+  },
+
+  status: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24
+  },
+
+  message: {
+    color: colors.secondaryText,
+    textAlign: 'center',
+    marginVertical: 16,
+    fontSize: fonts.sizes.normal
+  },
+
+  credit: {
+    color: colors.secondaryText,
+    textAlign: 'center',
+    fontSize: fonts.sizes.small,
+    marginVertical: 16
+  },
 });

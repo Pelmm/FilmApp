@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  useNavigationContainerRef
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -20,6 +23,7 @@ export default function AppNavigator() {
 
   function updateCurrentScreen() {
     const route = navigationRef.getCurrentRoute();
+
     if (route) {
       setCurrentScreen(route.name);
     }
@@ -50,11 +54,31 @@ export default function AppNavigator() {
               contentStyle: { backgroundColor: colors.background },
             }}
           >
-            <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'FilmApp' }} />
-            <Stack.Screen name="Search" component={SearchScreen} options={{ title: 'Sök filmer' }} />
-            <Stack.Screen name="MovieDetails" component={MovieDetailsScreen} options={{ title: 'Filmdetaljer' }} />
-            <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Logga in' }} />
-            <Stack.Screen name="Register" component={RegisterScreen} options={{ title: 'Registrera konto' }} />
+            <Stack.Screen
+              name="Home"
+              component={HomeScreen}
+              options={{ title: 'FilmApp' }}
+            />
+            <Stack.Screen
+              name="Search"
+              component={SearchScreen}
+              options={{ title: 'Sök filmer' }}
+            />
+            <Stack.Screen
+              name="MovieDetails"
+              component={MovieDetailsScreen}
+              options={{ title: 'Filmdetaljer' }}
+            />
+            <Stack.Screen
+              name="Login"
+              component={LoginScreen}
+              options={{ title: 'Logga in' }}
+            />
+            <Stack.Screen
+              name="Register"
+              component={RegisterScreen}
+              options={{ title: 'Registrera konto' }}
+            />
             {/* MyReviewsScreen registreras först när riktig autentisering finns. */}
           </Stack.Navigator>
         </View>
@@ -94,10 +118,37 @@ export default function AppNavigator() {
 
 const styles = StyleSheet.create({
   // Stacken får återstående höjd; navigationsraden får behålla sin egen höjd.
-  screenArea: { flex: 1 },
-  bottomArea: { flexShrink: 0, backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border },
-  navigationRow: { flexDirection: 'row' },
-  navigationButton: { flex: 1, minHeight: 52, padding: 8, alignItems: 'center', justifyContent: 'center' },
-  label: { color: colors.secondaryText, fontSize: fonts.sizes.small, fontWeight: fonts.weights.semibold, textAlign: 'center' },
-  selected: { color: colors.accent },
+  screenArea: {
+    flex: 1
+  },
+
+  bottomArea: {
+    flexShrink: 0,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border
+  },
+
+  navigationRow: {
+    flexDirection: 'row'
+  },
+
+  navigationButton: {
+    flex: 1,
+    minHeight: 52,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+
+  label: {
+    color: colors.secondaryText,
+    fontSize: fonts.sizes.small,
+    fontWeight: fonts.weights.semibold,
+    textAlign: 'center'
+  },
+
+  selected: {
+    color: colors.accent
+  },
 });

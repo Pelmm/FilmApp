@@ -7,11 +7,16 @@ const router = Router();
 
 export function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
+
   if (typeof secret !== 'string') {
-    throw new Error('JWT_SECRET måste vara en slumpmässig hemlighet med minst 32 tecken.');
+    throw new Error(
+      'JWT_SECRET måste vara en slumpmässig hemlighet med minst 32 tecken.'
+    );
   }
   if (secret.trim().length < 32) {
-    throw new Error('JWT_SECRET måste vara en slumpmässig hemlighet med minst 32 tecken.');
+    throw new Error(
+      'JWT_SECRET måste vara en slumpmässig hemlighet med minst 32 tecken.'
+    );
   }
   return secret;
 }
@@ -28,11 +33,15 @@ function isValidEmail(email) {
       return false;
     }
   }
+
   const parts = email.split('@');
+
   if (parts.length !== 2) {
     return false;
   }
+
   const [name, domain] = parts;
+
   if (!name) {
     return false;
   }
@@ -43,7 +52,9 @@ function isValidEmail(email) {
   ) {
     return false;
   }
+
   const domainParts = domain.split('.');
+
   if (domainParts.length < 2) {
     return false;
   }
@@ -69,21 +80,33 @@ function isValidEmail(email) {
 function createAuthResponse(user, secret) {
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresIn = 3600;
-  const token = jwt.sign({ sub: String(user._id), iat: issuedAt }, secret, {
-    algorithm: 'HS256',
-    expiresIn,
-  });
+  const token = jwt.sign(
+    {
+      sub: String(user._id),
+      iat: issuedAt
+    },
+    secret,
+    {
+      algorithm: 'HS256',
+      expiresIn,
+    }
+  );
   // Välj uttryckligen fälten som får lämna servern.
   return {
     token,
     expiresIn,
     expiresAt: new Date((issuedAt + expiresIn) * 1000).toISOString(),
-    user: { id: String(user._id), username: user.username, email: user.email },
+    user: {
+      id: String(user._id),
+      username: user.username,
+      email: user.email
+    },
   };
 }
 
 router.post('/register', async (req, res) => {
   const { username, email, password } = req.body || {};
+
   if (
     typeof username !== 'string' ||
     !username.trim()
@@ -96,7 +119,9 @@ router.post('/register', async (req, res) => {
   if (typeof email !== 'string') {
     return res.status(400).json({ error: 'Ange en giltig e-postadress.' });
   }
+
   const normalizedEmail = email.trim().toLowerCase();
+
   if (!isValidEmail(normalizedEmail)) {
     return res.status(400).json({ error: 'Ange en giltig e-postadress.' });
   }
@@ -114,11 +139,18 @@ router.post('/register', async (req, res) => {
   try {
     const secret = getJwtSecret();
     const existingUser = await User.findOne({ email: normalizedEmail });
+
     if (existingUser) {
       return res.status(409).json({ error: 'E-postadressen används redan.' });
     }
+
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({ username: username.trim(), email: normalizedEmail, passwordHash });
+    const user = await User.create({
+      username: username.trim(),
+      email: normalizedEmail,
+      passwordHash
+    });
+
     return res.status(201).json(createAuthResponse(user, secret));
   } catch (error) {
     // Det unika MongoDB-indexet skyddar även vid samtidiga registreringar.
@@ -131,10 +163,13 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
+
   if (typeof email !== 'string') {
     return res.status(400).json({ error: 'Ange en giltig e-postadress.' });
   }
+
   const normalizedEmail = email.trim().toLowerCase();
+
   if (!isValidEmail(normalizedEmail)) {
     return res.status(400).json({ error: 'Ange en giltig e-postadress.' });
   }
@@ -151,10 +186,13 @@ router.post('/login', async (req, res) => {
   try {
     const secret = getJwtSecret();
     const user = await User.findOne({ email: normalizedEmail });
+
     if (!user) {
       return res.status(401).json({ error: 'Felaktig e-postadress eller lösenord.' });
     }
+
     const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+
     if (!passwordMatches) {
       return res.status(401).json({ error: 'Felaktig e-postadress eller lösenord.' });
     }

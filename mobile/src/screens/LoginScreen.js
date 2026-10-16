@@ -20,7 +20,23 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  message: { marginBottom: 24 },
-  button: { backgroundColor: colors.accent, minHeight: 48, padding: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { color: colors.background, fontSize: fonts.sizes.normal, fontWeight: fonts.weights.bold, textAlign: 'center' },
+  message: {
+    marginBottom: 24
+  },
+
+  button: {
+    backgroundColor: colors.accent,
+    minHeight: 48,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+
+  buttonText: {
+    color: colors.background,
+    fontSize: fonts.sizes.normal,
+    fontWeight: fonts.weights.bold,
+    textAlign: 'center'
+  },
 });

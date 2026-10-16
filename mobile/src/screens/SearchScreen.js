@@ -35,6 +35,7 @@ export default function SearchScreen({ navigation }) {
         setHasSearched(false);
       }
     });
+
     return () => {
       unsubscribe();
       request.current?.abort();
@@ -46,7 +47,9 @@ export default function SearchScreen({ navigation }) {
     if (request.current) {
       return;
     }
+
     const searchQuery = query.trim();
+
     if (!searchQuery) {
       setError('Ange en filmtitel innan du söker.');
       setMovies([]);
@@ -55,6 +58,7 @@ export default function SearchScreen({ navigation }) {
     }
 
     const controller = new AbortController();
+
     request.current = controller;
     setLoading(true);
     setError('');
@@ -64,6 +68,7 @@ export default function SearchScreen({ navigation }) {
 
     try {
       const data = await searchMovies(searchQuery, 1, { signal: controller.signal });
+
       if (!controller.signal.aborted) {
         setMovies(data.results);
       }
@@ -82,10 +87,15 @@ export default function SearchScreen({ navigation }) {
   }
 
   let status = null;
+
   if (loading) {
     status = (
       <View style={styles.status}>
-        <ActivityIndicator size="large" color={colors.accent} accessibilityLabel="Söker efter filmer" />
+        <ActivityIndicator
+          size="large"
+          color={colors.accent}
+          accessibilityLabel="Söker efter filmer"
+        />
         <Text style={styles.message}>Söker efter filmer...</Text>
       </View>
     );
@@ -122,7 +132,10 @@ export default function SearchScreen({ navigation }) {
             disabled={loading}
             accessibilityRole="button"
             accessibilityLabel="Sök filmer"
-            accessibilityState={{ disabled: loading, busy: loading }}
+            accessibilityState={{
+              disabled: loading,
+              busy: loading
+            }}
           >
             <Text style={styles.buttonText}>Sök</Text>
           </Pressable>
@@ -148,7 +161,11 @@ const styles = StyleSheet.create({
     maxWidth: 640,
     alignSelf: 'center',
   },
-  searchRow: { flexDirection: 'row' },
+
+  searchRow: {
+    flexDirection: 'row'
+  },
+
   input: {
     flex: 1,
     minHeight: 48,
@@ -160,6 +177,7 @@ const styles = StyleSheet.create({
     color: colors.primaryText,
     fontSize: fonts.sizes.normal,
   },
+
   button: {
     marginLeft: 12,
     paddingHorizontal: 16,
@@ -169,19 +187,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   buttonText: {
     color: colors.background,
     fontSize: fonts.sizes.normal,
     fontWeight: fonts.weights.bold,
   },
-  disabledButton: { opacity: 0.5 },
+
+  disabledButton: {
+    opacity: 0.5
+  },
+
   list: {
     padding: 16,
     width: '100%',
     maxWidth: 640,
     alignSelf: 'center',
   },
-  status: { alignItems: 'center' },
+
+  status: {
+    alignItems: 'center'
+  },
+
   message: {
     color: colors.secondaryText,
     fontSize: fonts.sizes.normal,

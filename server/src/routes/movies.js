@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { getPopularMovies, searchMovies, getMovieDetails } from '../services/tmdb.js';
+import {
+  getPopularMovies,
+  searchMovies,
+  getMovieDetails
+} from '../services/tmdb.js';
 
 const router = Router();
 
@@ -12,6 +16,7 @@ function hasOnlyDigits(value) {
   }
 
   const digits = '0123456789';
+
   for (const character of value) {
     if (!digits.includes(character)) {
       return false;
@@ -25,7 +30,9 @@ function getPage(value = '1') {
   if (!hasOnlyDigits(value)) {
     return null;
   }
+
   const page = Number(value);
+
   if (page < 1) {
     return null;
   }
@@ -37,10 +44,13 @@ function getPage(value = '1') {
 
 router.get('/popular', async (req, res) => {
   const page = getPage(req.query.page);
+
   if (!page) {
     return res.status(400).json({ error: 'Sidnumret måste vara ett heltal mellan 1 och 500.' });
   }
+
   const movies = await getPopularMovies(page);
+
   res.json(movies);
 });
 
@@ -48,6 +58,7 @@ router.get('/popular', async (req, res) => {
 router.get('/search', async (req, res) => {
   const query = req.query.query;
   const page = getPage(req.query.page);
+
   if (typeof query !== 'string') {
     return res.status(400).json({ error: 'Ange ett sökord.' });
   }
@@ -57,12 +68,15 @@ router.get('/search', async (req, res) => {
   if (!page) {
     return res.status(400).json({ error: 'Sidnumret måste vara ett heltal mellan 1 och 500.' });
   }
+
   const movies = await searchMovies(query.trim(), page);
+
   res.json(movies);
 });
 
 router.get('/:id', async (req, res) => {
   const id = Number(req.params.id);
+
   if (
     !hasOnlyDigits(req.params.id) ||
     !Number.isSafeInteger(id) ||
@@ -70,7 +84,9 @@ router.get('/:id', async (req, res) => {
   ) {
     return res.status(400).json({ error: 'Film-ID måste vara ett positivt heltal.' });
   }
+
   const movie = await getMovieDetails(id);
+
   res.json(movie);
 });
 

@@ -21,7 +21,9 @@ async function startServer() {
     try {
       getJwtSecret();
     } catch {
-      console.error('JWT_SECRET måste vara en slumpmässig hemlighet med minst 32 tecken.');
+      console.error(
+        'JWT_SECRET måste vara en slumpmässig hemlighet med minst 32 tecken.'
+      );
       process.exitCode = 1;
       return;
     }
@@ -38,7 +40,9 @@ async function startServer() {
       process.exitCode = 1;
     });
   } catch {
-    console.error('Kunde inte starta FilmApp API. Kontrollera MongoDB-anslutningen och databasens index.');
+    console.error(
+      'Kunde inte starta FilmApp API. Kontrollera MongoDB-anslutningen och databasens index.'
+    );
     process.exitCode = 1;
   }
 }

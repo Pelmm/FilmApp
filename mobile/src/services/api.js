@@ -5,10 +5,13 @@ export function getApiUrl(path, baseUrl = process.env.EXPO_PUBLIC_API_URL) {
     typeof baseUrl !== 'string' ||
     !baseUrl.trim()
   ) {
-    throw new Error('Backendadressen saknas. Ange EXPO_PUBLIC_API_URL i mobile/.env och ladda om appen.');
+    throw new Error(
+      'Backendadressen saknas. Ange EXPO_PUBLIC_API_URL i mobile/.env och ladda om appen.'
+    );
   }
 
   let url;
+
   try {
     url = new URL(baseUrl.trim());
     if (!['http:', 'https:'].includes(url.protocol)) {
@@ -23,10 +26,13 @@ export function getApiUrl(path, baseUrl = process.env.EXPO_PUBLIC_API_URL) {
       throw new Error();
     }
   } catch {
-    throw new Error('Backendadressen är ogiltig. EXPO_PUBLIC_API_URL ska vara en HTTP- eller HTTPS-adress utan inloggningsuppgifter, query eller fragment.');
+    throw new Error(
+      'Backendadressen är ogiltig. EXPO_PUBLIC_API_URL ska vara en HTTP- eller HTTPS-adress utan inloggningsuppgifter, query eller fragment.'
+    );
   }
 
   let address = url.toString();
+
   while (address.endsWith('/')) {
     address = address.slice(0, -1);
   }
@@ -40,10 +46,12 @@ async function getJson(path, { signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   const url = getApiUrl(path);
   const controller = new AbortController();
   const abortRequest = () => controller.abort();
+
   signal?.addEventListener('abort', abortRequest);
   if (signal?.aborted) {
     controller.abort();
   }
+
   const timeout = setTimeout(abortRequest, timeoutMs);
   let response;
   let data;
@@ -69,10 +77,14 @@ async function getJson(path, { signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
       throw error;
     }
     if (controller.signal.aborted) {
-      throw new Error('Servern svarade inte i tid. Kontrollera anslutningen och försök igen.');
+      throw new Error(
+        'Servern svarade inte i tid. Kontrollera anslutningen och försök igen.'
+      );
     }
     if (!response) {
-      throw new Error('Kunde inte nå servern. Kontrollera att backend är igång och att backendadressen och nätverket stämmer. Försök igen.');
+      throw new Error(
+        'Kunde inte nå servern. Kontrollera att backend är igång och att backendadressen och nätverket stämmer. Försök igen.'
+      );
     }
     if (data === undefined) {
       if (!response.ok) {
@@ -89,6 +101,7 @@ async function getJson(path, { signal, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
 
 export async function getHealth(options) {
   const data = await getJson('health', options);
+
   if (data?.status !== 'ok') {
     throw new Error('Serverns svar saknar förväntad status "ok". Försök igen.');
   }
@@ -104,6 +117,7 @@ function checkMovieList(data) {
 
 export async function getPopularMovies(page = 1, options) {
   const data = await getJson(`movies/popular?page=${encodeURIComponent(page)}`, options);
+
   return checkMovieList(data);
 }
 
@@ -114,19 +128,27 @@ export async function searchMovies(query, page = 1, options) {
   ) {
     throw new Error('Ange ett sökord.');
   }
-  const data = await getJson(`movies/search?query=${encodeURIComponent(query.trim())}&page=${encodeURIComponent(page)}`, options);
+
+  const data = await getJson(
+    `movies/search?query=${encodeURIComponent(query.trim())}&page=${encodeURIComponent(page)}`,
+    options
+  );
+
   return checkMovieList(data);
 }
 
 export async function getMovieDetails(id, options) {
   const movieId = Number(id);
+
   if (
     !Number.isSafeInteger(movieId) ||
     movieId < 1
   ) {
     throw new Error('Film-ID måste vara ett positivt heltal.');
   }
+
   const data = await getJson(`movies/${encodeURIComponent(id)}`, options);
+
   if (data?.id !== movieId) {
     throw new Error('Servern skickade ogiltiga filmdetaljer.');
   }

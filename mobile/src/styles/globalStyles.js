@@ -7,18 +7,21 @@ const globalStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+
   placeholderContainer: {
     flex: 1,
     backgroundColor: colors.background,
     padding: 24,
     justifyContent: 'center',
   },
+
   title: {
     color: colors.primaryText,
     fontSize: fonts.sizes.title,
     fontWeight: fonts.weights.bold,
     marginBottom: 16,
   },
+
   text: {
     color: colors.secondaryText,
     fontSize: fonts.sizes.normal,

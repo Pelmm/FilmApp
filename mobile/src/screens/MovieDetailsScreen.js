@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native';
 import { getMovieDetails } from '../services/api';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
@@ -14,6 +22,7 @@ export default function MovieDetailsScreen({ route }) {
   const [imageFailed, setImageFailed] = useState(false);
 
   let validMovieId = Number.isSafeInteger(movieId);
+
   if (movieId < 1) {
     validMovieId = false;
   }
@@ -22,6 +31,7 @@ export default function MovieDetailsScreen({ route }) {
     if (!validMovieId) {
       return;
     }
+
     const controller = new AbortController();
 
     async function loadMovie() {
@@ -31,6 +41,7 @@ export default function MovieDetailsScreen({ route }) {
       setImageFailed(false);
       try {
         const data = await getMovieDetails(movieId, { signal: controller.signal });
+
         if (!controller.signal.aborted) {
           setMovie(data);
         }
@@ -61,7 +72,11 @@ export default function MovieDetailsScreen({ route }) {
   if (loading) {
     return (
       <View style={[globalStyles.container, styles.status]}>
-        <ActivityIndicator size="large" color={colors.accent} accessibilityLabel="Hämtar filmdetaljer" />
+        <ActivityIndicator
+          size="large"
+          color={colors.accent}
+          accessibilityLabel="Hämtar filmdetaljer"
+        />
         <Text style={styles.message}>Hämtar filmdetaljer...</Text>
       </View>
     );
@@ -96,29 +111,37 @@ export default function MovieDetailsScreen({ route }) {
   const releaseDate = movie.release_date || 'Premiärdatum saknas';
   const overview = movie.overview.trim() || 'Beskrivning saknas för den här filmen.';
   let rating = 'Betyg saknas';
+
   if (movie.vote_average !== null) {
     rating = `${movie.vote_average.toFixed(1).replace('.', ',')} / 10`;
   }
 
   let genreInfo = null;
+
   if (movie.genres.length > 0) {
     const genres = movie.genres.map((genre) => genre.name).join(', ');
+
     genreInfo = <Text style={styles.metadata}>Genrer: {genres}</Text>;
   }
+
   let runtimeInfo = null;
+
   if (movie.runtime !== null) {
     runtimeInfo = <Text style={styles.metadata}>Speltid: {movie.runtime} minuter</Text>;
   }
 
   let showPoster = Boolean(movie.poster_path);
+
   if (imageFailed) {
     showPoster = false;
   }
+
   let poster = (
     <View style={[styles.poster, styles.placeholder]}>
       <Text style={styles.message}>Affisch saknas</Text>
     </View>
   );
+
   if (showPoster) {
     poster = (
       <Image
@@ -132,7 +155,10 @@ export default function MovieDetailsScreen({ route }) {
   }
 
   return (
-    <ScrollView style={globalStyles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={globalStyles.container}
+      contentContainerStyle={styles.content}
+    >
       <Text style={globalStyles.title}>{title}</Text>
       {poster}
       <Text style={styles.metadata}>Premiärdatum: {releaseDate}</Text>
@@ -152,7 +178,13 @@ const styles = StyleSheet.create({
     maxWidth: 640,
     alignSelf: 'center',
   },
-  status: { alignItems: 'center', justifyContent: 'center', padding: 24 },
+
+  status: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24
+  },
+
   message: {
     color: colors.secondaryText,
     fontSize: fonts.sizes.normal,
@@ -160,6 +192,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 16,
   },
+
   poster: {
     width: '100%',
     maxWidth: 300,
@@ -169,14 +202,26 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 24,
   },
-  placeholder: { alignItems: 'center', justifyContent: 'center', padding: 16 },
+
+  placeholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16
+  },
+
   metadata: {
     color: colors.secondaryText,
     fontSize: fonts.sizes.normal,
     lineHeight: 24,
     marginBottom: 12,
   },
-  rating: { color: colors.accent, fontSize: fonts.sizes.normal, marginBottom: 12 },
+
+  rating: {
+    color: colors.accent,
+    fontSize: fonts.sizes.normal,
+    marginBottom: 12
+  },
+
   heading: {
     color: colors.primaryText,
     fontSize: fonts.sizes.cardTitle,
@@ -184,6 +229,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 12,
   },
-  retryButton: { backgroundColor: colors.accent, padding: 16, borderRadius: 8 },
-  retryText: { color: colors.background, fontSize: fonts.sizes.normal, fontWeight: fonts.weights.bold },
+
+  retryButton: {
+    backgroundColor: colors.accent,
+    padding: 16,
+    borderRadius: 8
+  },
+
+  retryText: {
+    color: colors.background,
+    fontSize: fonts.sizes.normal,
+    fontWeight: fonts.weights.bold
+  },
 });
