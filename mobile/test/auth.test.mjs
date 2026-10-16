@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import test, { beforeEach, afterEach } from 'node:test';
-import { registerUser, loginUser } from '../src/services/api.js';
+import { registerUser, loginUser, getCurrentUser } from '../src/services/api.js';
 
 const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
 const user = {
@@ -58,6 +58,7 @@ test('registrering skickar rätt JSON till konfigurerad Express-adress', async (
 
 test('inloggning skickar bara e-post och oförändrat lösenord', async (t) => {
   const password = ' Lösenord med blanksteg ';
+  const data = authResponse();
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     assert.equal(url, 'http://10.0.2.2:3000/api/auth/login');
     assert.equal(options.method, 'POST');
@@ -65,10 +66,10 @@ test('inloggning skickar bara e-post och oförändrat lösenord', async (t) => {
       email: user.email,
       password,
     });
-    return Response.json(authResponse());
+    return Response.json(data);
   });
 
-  assert.deepEqual(await loginUser({ email: ' test@example.com ', password }), user);
+  assert.deepEqual(await loginUser({ email: ' test@example.com ', password }), data);
 });
 
 test('felaktiga inloggningsuppgifter och upptagen e-post ger backendens begripliga fel', async (t) => {
@@ -157,7 +158,7 @@ test('ogiltig JSON och ofullständiga auth-svar avvisas', async (t) => {
   }
 });
 
-test('JWT returneras inte till skärmarna och auth-anropen loggar inga uppgifter', async (t) => {
+test('registrering ignorerar JWT, inloggning ger sessionen till Context och inga uppgifter loggas', async (t) => {
   const log = t.mock.method(console, 'log');
   const warn = t.mock.method(console, 'warn');
   const error = t.mock.method(console, 'error');
@@ -165,14 +166,41 @@ test('JWT returneras inte till skärmarna och auth-anropen loggar inga uppgifter
   data.user.passwordHash = 'får inte lämnas vidare';
   t.mock.method(globalThis, 'fetch', async () => Response.json(data));
 
-  for (const action of [registerUser, loginUser]) {
-    const result = await action(credentials);
-    assert.deepEqual(Object.keys(result).sort(), ['email', 'id', 'username']);
-    assert.equal(JSON.stringify(result).includes(data.token), false);
-    assert.equal(result.passwordHash, undefined);
-  }
+  const registered = await registerUser(credentials);
+  assert.deepEqual(Object.keys(registered).sort(), ['email', 'id', 'username']);
+  assert.equal(JSON.stringify(registered).includes(data.token), false);
+
+  const session = await loginUser(credentials);
+  assert.equal(session.token, data.token);
+  assert.deepEqual(Object.keys(session.user).sort(), ['email', 'id', 'username']);
+  assert.equal(session.user.passwordHash, undefined);
 
   assert.equal(log.mock.callCount(), 0);
   assert.equal(warn.mock.callCount(), 0);
   assert.equal(error.mock.callCount(), 0);
+});
+
+test('sessionskontroll använder Bearer och lämnar endast vidare användarfält', async (t) => {
+  const data = authResponse();
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'http://10.0.2.2:3000/api/auth/me');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.headers.Authorization, `Bearer ${data.token}`);
+    return Response.json({ ...user, passwordHash: 'inte till skärmen' });
+  });
+  assert.deepEqual(await getCurrentUser(data.token), user);
+});
+
+test('sessionskontroll skiljer 401 från nätverksfel även utan giltig JSON', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', async () => Response.json({
+    error: 'Sessionen har gått ut.',
+  }, { status: 401 }));
+  await assert.rejects(getCurrentUser('test'), { status: 401 });
+  mock.mock.mockImplementation(async () => new Response('Unauthorized', { status: 401 }));
+  await assert.rejects(getCurrentUser('test'), { status: 401 });
+  mock.mock.mockImplementation(async () => { throw new TypeError('Network request failed'); });
+  await assert.rejects(getCurrentUser('test'), (error) => {
+    assert.equal(error.status, undefined);
+    return true;
+  });
 });

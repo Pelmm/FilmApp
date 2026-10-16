@@ -237,3 +237,58 @@ test('serverstart avvisar saknad databas, svag JWT-hemlighet och ogiltig port f�
     });
   }
 });
+
+async function currentUser(authorization) {
+  const headers = {};
+  if (authorization) headers.Authorization = authorization;
+  const response = await fetch(`${baseUrl}/me`, { headers });
+  return { status: response.status, body: await response.json() };
+}
+
+test('me verifierar HS256 och sub samt hämtar aktuell användare utan hash', async (t) => {
+  const user = new User({ ...credentials, passwordHash: 'inte i svaret' });
+  const lookup = t.mock.method(User, 'findById', async (id) => {
+    assert.equal(id, String(user._id));
+    return user;
+  });
+  const token = jwt.sign({}, secret, { subject: String(user._id), expiresIn: '1h' });
+  const result = await currentUser(`Bearer ${token}`);
+  assert.deepEqual(result, {
+    status: 200,
+    body: { id: String(user._id), username: user.username, email: user.email },
+  });
+  assert.equal(lookup.mock.callCount(), 1);
+  assert.equal(JSON.stringify(result.body).includes(token), false);
+});
+
+test('me avvisar saknad, ogiltig och utgången token före databasanrop', async (t) => {
+  const lookup = t.mock.method(User, 'findById', async () => { throw new Error('Unexpected database call'); });
+  const id = String(new User()._id);
+  const expired = jwt.sign({}, secret, { subject: id, expiresIn: -1 });
+  const wrongSecret = jwt.sign({}, randomBytes(32).toString('hex'), { subject: id, expiresIn: '1h' });
+  const wrongAlgorithm = jwt.sign({}, secret, { subject: id, expiresIn: '1h', algorithm: 'HS384' });
+  const invalidId = jwt.sign({}, secret, { subject: 'bad-id', expiresIn: '1h' });
+  const noExpiry = jwt.sign({}, secret, { subject: id });
+  const invalidHeaders = [undefined, 'Basic abc', 'Bearer', 'Bearer abc extra', 'Bearer abc',
+    `Bearer ${expired}`, `Bearer ${wrongSecret}`, `Bearer ${wrongAlgorithm}`, `Bearer ${invalidId}`, `Bearer ${noExpiry}`];
+  for (const header of invalidHeaders) {
+    assert.deepEqual(await currentUser(header), {
+      status: 401,
+      body: { error: 'Sessionen är ogiltig eller har gått ut. Logga in igen.' },
+    });
+  }
+  assert.equal(lookup.mock.callCount(), 0);
+});
+
+test('me ger 401 för borttagen användare och neutrala 500-svar vid driftfel', async (t) => {
+  const lookup = t.mock.method(User, 'findById', async () => null);
+  const token = jwt.sign({}, secret, { subject: String(new User()._id), expiresIn: '1h' });
+  assert.equal((await currentUser(`Bearer ${token}`)).status, 401);
+  lookup.mock.mockImplementation(async () => { throw new Error('Intern databasdetalj'); });
+  assert.deepEqual(await currentUser(`Bearer ${token}`), {
+    status: 500,
+    body: { error: 'Kunde inte kontrollera sessionen. Försök igen senare.' },
+  });
+  delete process.env.JWT_SECRET;
+  assert.equal((await currentUser(`Bearer ${token}`)).status, 500);
+});
