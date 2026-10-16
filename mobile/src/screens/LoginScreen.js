@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -11,15 +11,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { loginUser } from '../services/api';
+import { AuthContext } from '../context/AuthContext';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
 import globalStyles from '../styles/globalStyles';
 
 export default function LoginScreen({ navigation }) {
+  const { signIn } = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const request = useRef(null);
@@ -30,7 +30,6 @@ export default function LoginScreen({ navigation }) {
       request.current = null;
       setLoading(false);
       setPassword('');
-      setUsername('');
       setError('');
     });
 
@@ -44,10 +43,7 @@ export default function LoginScreen({ navigation }) {
     if (request.current) {
       return;
     }
-    if (
-      !email.trim() ||
-      !password
-    ) {
+    if (!email.trim() || !password) {
       setError('Fyll i e-postadress och lösenord.');
       return;
     }
@@ -59,13 +55,12 @@ export default function LoginScreen({ navigation }) {
     Keyboard.dismiss();
 
     try {
-      const user = await loginUser(
+      await signIn(
         { email, password },
         { signal: controller.signal }
       );
 
       if (!controller.signal.aborted) {
-        setUsername(user.username);
         setPassword('');
       }
     } catch (error) {
@@ -82,84 +77,65 @@ export default function LoginScreen({ navigation }) {
     }
   }
 
-  let content;
-
-  if (username) {
-    content = (
-      <View>
+  const content = (
+    <View>
+      <Text style={styles.label}>E-postadress</Text>
+      <TextInput
+        style={styles.input}
+        value={email}
+        onChangeText={setEmail}
+        accessibilityLabel="E-postadress"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        editable={!loading}
+      />
+      <Text style={styles.label}>Lösenord</Text>
+      <TextInput
+        style={styles.input}
+        value={password}
+        onChangeText={setPassword}
+        accessibilityLabel="Lösenord"
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="current-password"
+        editable={!loading}
+      />
+      {error !== '' && (
         <Text style={styles.message} accessibilityLiveRegion="polite">
-          Inloggningen lyckades. Välkommen, {username}!
+          {error}
         </Text>
-        <Pressable
-          style={styles.button}
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('Home')}
-        >
-          <Text style={styles.buttonText}>Till startsidan</Text>
-        </Pressable>
-      </View>
-    );
-  } else {
-    content = (
-      <View>
-        <Text style={styles.label}>E-postadress</Text>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          accessibilityLabel="E-postadress"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          editable={!loading}
+      )}
+      {loading && (
+        <ActivityIndicator
+          style={styles.spinner}
+          color={colors.accent}
+          accessibilityLabel="Loggar in"
         />
-        <Text style={styles.label}>Lösenord</Text>
-        <TextInput
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          accessibilityLabel="Lösenord"
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="current-password"
-          editable={!loading}
-        />
-        {error !== '' && (
-          <Text style={styles.message} accessibilityLiveRegion="polite">
-            {error}
-          </Text>
-        )}
-        {loading && (
-          <ActivityIndicator
-            style={styles.spinner}
-            color={colors.accent}
-            accessibilityLabel="Loggar in"
-          />
-        )}
-        <Pressable
-          style={[styles.button, loading && styles.disabledButton]}
-          accessibilityRole="button"
-          accessibilityState={{
-            disabled: loading,
-            busy: loading,
-          }}
-          disabled={loading}
-          onPress={handleLogin}
-        >
-          <Text style={styles.buttonText}>Logga in</Text>
-        </Pressable>
-        <Pressable
-          style={styles.link}
-          accessibilityRole="button"
-          onPress={() => navigation.navigate('Register')}
-        >
-          <Text style={styles.linkText}>Registrera konto</Text>
-        </Pressable>
-      </View>
-    );
-  }
+      )}
+      <Pressable
+        style={[styles.button, loading && styles.disabledButton]}
+        accessibilityRole="button"
+        accessibilityState={{
+          disabled: loading,
+          busy: loading,
+        }}
+        disabled={loading}
+        onPress={handleLogin}
+      >
+        <Text style={styles.buttonText}>Logga in</Text>
+      </Pressable>
+      <Pressable
+        style={styles.link}
+        accessibilityRole="button"
+        onPress={() => navigation.navigate('Register')}
+      >
+        <Text style={styles.linkText}>Registrera konto</Text>
+      </Pressable>
+    </View>
+  );
 
   return (
     <KeyboardAvoidingView

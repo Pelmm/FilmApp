@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useContext, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   NavigationContainer,
@@ -11,6 +11,8 @@ import SearchScreen from '../screens/SearchScreen';
 import MovieDetailsScreen from '../screens/MovieDetailsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import MyReviewsScreen from '../screens/MyReviewsScreen';
+import { AuthContext } from '../context/AuthContext';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
 import globalStyles from '../styles/globalStyles';
@@ -18,6 +20,7 @@ import globalStyles from '../styles/globalStyles';
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
+  const { isAuthenticated, restoring, message, canRetry, retryRestore } = useContext(AuthContext);
   const navigationRef = useNavigationContainerRef();
   const [currentScreen, setCurrentScreen] = useState('Home');
 
@@ -35,9 +38,26 @@ export default function AppNavigator() {
     }
   }
 
+  function openMyReviews() {
+    if (isAuthenticated) {
+      openScreen('MyReviews');
+    } else {
+      openScreen('Login');
+    }
+  }
+
   const homeSelected = currentScreen === 'Home';
   const searchSelected = currentScreen === 'Search';
-  const reviewsSelected = currentScreen === 'Login' || currentScreen === 'Register';
+  const reviewsSelected = ['Login', 'Register', 'MyReviews'].includes(currentScreen);
+
+  if (restoring) {
+    return (
+      <View style={globalStyles.placeholderContainer}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={globalStyles.text}>Återställer inloggningen...</Text>
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer
@@ -46,6 +66,22 @@ export default function AppNavigator() {
       onStateChange={updateCurrentScreen}
     >
       <View style={globalStyles.container}>
+        {message !== '' && (
+          <View style={styles.sessionMessage}>
+            <Text style={globalStyles.text} accessibilityLiveRegion="polite">
+              {message}
+            </Text>
+            {canRetry && (
+              <Pressable
+                style={styles.retryButton}
+                accessibilityRole="button"
+                onPress={retryRestore}
+              >
+                <Text style={[styles.label, styles.selected]}>Försök igen</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
         <View style={styles.screenArea}>
           <Stack.Navigator
             screenOptions={{
@@ -69,17 +105,26 @@ export default function AppNavigator() {
               component={MovieDetailsScreen}
               options={{ title: 'Filmdetaljer' }}
             />
-            <Stack.Screen
-              name="Login"
-              component={LoginScreen}
-              options={{ title: 'Logga in' }}
-            />
-            <Stack.Screen
-              name="Register"
-              component={RegisterScreen}
-              options={{ title: 'Registrera konto' }}
-            />
-            {/* MyReviewsScreen registreras först när riktig autentisering finns. */}
+            {isAuthenticated ? (
+              <Stack.Screen
+                name="MyReviews"
+                component={MyReviewsScreen}
+                options={{ title: 'Mina recensioner' }}
+              />
+            ) : (
+              <>
+                <Stack.Screen
+                  name="Login"
+                  component={LoginScreen}
+                  options={{ title: 'Logga in' }}
+                />
+                <Stack.Screen
+                  name="Register"
+                  component={RegisterScreen}
+                  options={{ title: 'Registrera konto' }}
+                />
+              </>
+            )}
           </Stack.Navigator>
         </View>
 
@@ -105,7 +150,7 @@ export default function AppNavigator() {
               style={styles.navigationButton}
               accessibilityRole="button"
               accessibilityState={{ selected: reviewsSelected }}
-              onPress={() => openScreen('Login')}
+              onPress={openMyReviews}
             >
               <Text style={[styles.label, reviewsSelected && styles.selected]}>Mina recensioner</Text>
             </Pressable>
@@ -117,6 +162,18 @@ export default function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
+  retryButton: {
+    minHeight: 48,
+    padding: 12,
+    justifyContent: 'center',
+  },
+
+  sessionMessage: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+
   // Stacken får återstående höjd; navigationsraden får behålla sin egen höjd.
   screenArea: {
     flex: 1

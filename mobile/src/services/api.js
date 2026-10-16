@@ -47,6 +47,7 @@ async function getJson(path, {
   timeoutMs = REQUEST_TIMEOUT_MS,
   method = 'GET',
   body,
+  token,
 } = {}) {
   const url = getApiUrl(path);
   const controller = new AbortController();
@@ -72,15 +73,22 @@ async function getJson(path, {
     request.body = JSON.stringify(body);
   }
 
+  if (token) {
+    request.headers.Authorization = `Bearer ${token}`;
+  }
+
   try {
     response = await fetch(url, request);
     data = await response.json();
 
     if (!response.ok) {
+      let message = `Servern svarade med HTTP ${response.status}. Försök igen.`;
       if (typeof data?.error === 'string') {
-        throw new Error(data.error);
+        message = data.error;
       }
-      throw new Error(`Servern svarade med HTTP ${response.status}. Försök igen.`);
+      const error = new Error(message);
+      error.status = response.status;
+      throw error;
     }
     return data;
   } catch (error) {
@@ -100,7 +108,9 @@ async function getJson(path, {
     }
     if (data === undefined) {
       if (!response.ok) {
-        throw new Error(`Servern svarade med HTTP ${response.status}. Försök igen.`);
+        const error = new Error(`Servern svarade med HTTP ${response.status}. Försök igen.`);
+        error.status = response.status;
+        throw error;
       }
       throw new Error('Servern skickade ett svar som inte är giltig JSON. Försök igen.');
     }
@@ -167,23 +177,27 @@ export async function getMovieDetails(id, options) {
   return data;
 }
 
-function getAuthUser(data) {
+function getUser(data) {
   if (
-    typeof data?.token !== 'string' ||
-    !data.token ||
-    typeof data?.user?.id !== 'string' ||
-    typeof data.user.username !== 'string' ||
-    typeof data.user.email !== 'string'
+    typeof data?.id !== 'string' ||
+    typeof data.username !== 'string' ||
+    typeof data.email !== 'string'
   ) {
     throw new Error('Servern skickade ett ogiltigt autentiseringssvar. Försök igen.');
   }
 
-  // JWT behövs först i nästa steg. Skärmarna får endast användarinformation.
   return {
-    id: data.user.id,
-    username: data.user.username,
-    email: data.user.email,
+    id: data.id,
+    username: data.username,
+    email: data.email,
   };
+}
+
+function getAuthUser(data) {
+  if (typeof data?.token !== 'string' || !data.token) {
+    throw new Error('Servern skickade ett ogiltigt autentiseringssvar. Försök igen.');
+  }
+  return getUser(data.user);
 }
 
 export async function registerUser({ username, email, password }, options) {
@@ -210,5 +224,21 @@ export async function loginUser({ email, password }, options) {
     },
   });
 
-  return getAuthUser(data);
+  const user = getAuthUser(data);
+
+  if (!Number.isFinite(Date.parse(data.expiresAt)) || !Number.isInteger(data.expiresIn)) {
+    throw new Error('Servern skickade ett ogiltigt autentiseringssvar. Försök igen.');
+  }
+  // Hela svaret används endast av AuthContext, aldrig som skärmtext.
+  return {
+    token: data.token,
+    expiresIn: data.expiresIn,
+    expiresAt: data.expiresAt,
+    user,
+  };
+}
+
+export async function getCurrentUser(token, options) {
+  const data = await getJson('auth/me', { ...options, token });
+  return getUser(data);
 }
