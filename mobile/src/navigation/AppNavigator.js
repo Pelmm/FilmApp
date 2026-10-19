@@ -12,6 +12,7 @@ import MovieDetailsScreen from '../screens/MovieDetailsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import MyReviewsScreen from '../screens/MyReviewsScreen';
+import ReviewEditorScreen from '../screens/ReviewEditorScreen';
 import { AuthContext } from '../context/AuthContext';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
@@ -48,7 +49,7 @@ export default function AppNavigator() {
 
   const homeSelected = currentScreen === 'Home';
   const searchSelected = currentScreen === 'Search';
-  const reviewsSelected = ['Login', 'Register', 'MyReviews'].includes(currentScreen);
+  const reviewsSelected = ['Login', 'Register', 'MyReviews', 'ReviewEditor'].includes(currentScreen);
 
   if (restoring) {
     return (
@@ -106,11 +107,18 @@ export default function AppNavigator() {
               options={{ title: 'Filmdetaljer' }}
             />
             {isAuthenticated ? (
-              <Stack.Screen
-                name="MyReviews"
-                component={MyReviewsScreen}
-                options={{ title: 'Mina recensioner' }}
-              />
+              <>
+                <Stack.Screen
+                  name="MyReviews"
+                  component={MyReviewsScreen}
+                  options={{ title: 'Mina recensioner' }}
+                />
+                <Stack.Screen
+                  name="ReviewEditor"
+                  component={ReviewEditorScreen}
+                  options={{ title: 'Recension' }}
+                />
+              </>
             ) : (
               <>
                 <Stack.Screen

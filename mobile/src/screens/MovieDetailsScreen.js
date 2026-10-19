@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Image,
@@ -8,18 +9,26 @@ import {
   Text,
   View
 } from 'react-native';
-import { getMovieDetails } from '../services/api';
+import { getMovieDetails, getMovieReviews } from '../services/api';
+import { AuthContext } from '../context/AuthContext';
+import ReviewCard from '../components/ReviewCard';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
 import globalStyles from '../styles/globalStyles';
 
-export default function MovieDetailsScreen({ route }) {
+export default function MovieDetailsScreen({ route, navigation }) {
+  const { user, isAuthenticated } = useContext(AuthContext);
+  const isFocused = useIsFocused();
   const movieId = route.params?.movieId;
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [imageFailed, setImageFailed] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsError, setReviewsError] = useState('');
+  const [reviewsAttempt, setReviewsAttempt] = useState(0);
 
   let validMovieId = Number.isSafeInteger(movieId);
 
@@ -60,6 +69,36 @@ export default function MovieDetailsScreen({ route }) {
     // Avbryt när film-ID ändras eller detaljskärmen avmonteras.
     return () => controller.abort();
   }, [movieId, validMovieId, attempt]);
+
+  useEffect(() => {
+    setReviews([]);
+    setReviewsLoading(true);
+    setReviewsError('');
+    if (!isFocused || !validMovieId) {
+      return;
+    }
+    const controller = new AbortController();
+
+    async function loadReviews() {
+      try {
+        const data = await getMovieReviews(movieId, { signal: controller.signal });
+        if (!controller.signal.aborted) {
+          setReviews(data);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setReviewsError(error.message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setReviewsLoading(false);
+        }
+      }
+    }
+
+    loadReviews();
+    return () => controller.abort();
+  }, [isFocused, movieId, validMovieId, reviewsAttempt, user?.id]);
 
   if (!validMovieId) {
     return (
@@ -108,6 +147,7 @@ export default function MovieDetailsScreen({ route }) {
 
   // Backend validerar filmdata. Här väljer vi endast vad som visas.
   const title = movie.title || 'Titel saknas';
+  const ownReview = reviews.find(review => review.user?.id === user?.id);
   const releaseDate = movie.release_date || 'Premiärdatum saknas';
   const overview = movie.overview.trim() || 'Beskrivning saknas för den här filmen.';
   let rating = 'Betyg saknas';
@@ -167,6 +207,49 @@ export default function MovieDetailsScreen({ route }) {
       {runtimeInfo}
       <Text style={styles.heading}>Handling</Text>
       <Text style={globalStyles.text}>{overview}</Text>
+      <Text style={styles.heading}>Recensioner</Text>
+      {reviewsLoading && <ActivityIndicator color={colors.accent} accessibilityLabel="Hämtar recensioner" />}
+      {reviewsError !== '' && (
+        <View>
+          <Text style={styles.message}>{reviewsError}</Text>
+          <Pressable
+            style={styles.retryButton}
+            accessibilityRole="button"
+            onPress={() => setReviewsAttempt(current => current + 1)}
+          >
+            <Text style={styles.retryText}>Försök igen</Text>
+          </Pressable>
+        </View>
+      )}
+      {!reviewsLoading && !reviewsError && reviews.length === 0 && (
+        <Text style={styles.message}>Inga recensioner ännu</Text>
+      )}
+      {reviews.map(review => (
+        <ReviewCard
+          key={review.id}
+          review={review}
+          movieTitle={title}
+          onChanged={() => setReviewsAttempt(current => current + 1)}
+        />
+      ))}
+      {!isAuthenticated && (
+        <Pressable
+          style={styles.retryButton}
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('Login')}
+        >
+          <Text style={styles.retryText}>Logga in för att skriva en recension</Text>
+        </Pressable>
+      )}
+      {isAuthenticated && !reviewsLoading && !reviewsError && !ownReview && (
+        <Pressable
+          style={styles.retryButton}
+          accessibilityRole="button"
+          onPress={() => navigation.navigate('ReviewEditor', { movieId, movieTitle: title })}
+        >
+          <Text style={styles.retryText}>Skriv recension</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
