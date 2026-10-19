@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import moviesRouter from './routes/movies.js';
 import authRouter from './routes/auth.js';
+import reviewsRouter from './routes/reviews.js';
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/movies', moviesRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/reviews', reviewsRouter);
 
 // Felaktig JSON ska inte skicka Express interna fel eller delar av requesten.
 app.use((error, _req, res, _next) => {

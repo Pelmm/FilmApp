@@ -1,8 +1,10 @@
 import 'dotenv/config';
+import { disconnect } from 'mongoose';
 import app from './app.js';
 import { connectDatabase } from './database.js';
 import User from './models/User.js';
-import { getJwtSecret } from './routes/auth.js';
+import Review from './models/Review.js';
+import { getJwtSecret } from './middleware/auth.js';
 
 const port = Number(process.env.PORT || 3000);
 
@@ -28,8 +30,9 @@ async function startServer() {
       return;
     }
     await connectDatabase();
-    // Vänta på User-modellens unika e-postindex innan registrering tillåts.
+    // Vänta på unika index innan registrering och recensioner tillåts.
     await User.init();
+    await Review.init();
 
     const server = app.listen(port, '0.0.0.0', () => {
       console.log(`FilmApp API körs på http://localhost:${port}/api/health`);
@@ -43,6 +46,7 @@ async function startServer() {
     console.error(
       'Kunde inte starta FilmApp API. Kontrollera MongoDB-anslutningen och databasens index.'
     );
+    await disconnect();
     process.exitCode = 1;
   }
 }
