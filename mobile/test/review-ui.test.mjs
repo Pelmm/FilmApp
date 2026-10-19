@@ -43,6 +43,9 @@ function screen(name, props = {}, authenticated = true) {
       return { action: 'sharedAction' };
     },
   };
+  const timers = new Map();
+  let timerId = 0;
+  let now = 0;
   let focused = true;
   let position = 0;
   let dirty = true;
@@ -84,6 +87,13 @@ function screen(name, props = {}, authenticated = true) {
     useContext: () => auth,
     useNavigation: () => navigation,
     useIsFocused: () => focused,
+    useSafeAreaInsets: () => ({ top: 24, bottom: 24, left: 0, right: 0 }),
+    setTimeout(callback, delay) {
+      const id = ++timerId;
+      timers.set(id, { callback, due: now + delay });
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
     useState(initial) {
       const index = position++;
       if (!(index in hooks)) hooks[index] = initial;
@@ -115,7 +125,7 @@ function screen(name, props = {}, authenticated = true) {
     colors: {}, fonts: { sizes: {}, weights: {} }, globalStyles: {},
   };
   for (const name of ['ActivityIndicator', 'Image', 'KeyboardAvoidingView', 'ScrollView',
-    'FlatList', 'TextInput', 'Pressable', 'Text', 'View', 'ReviewCard', 'MovieCard']) scope[name] = name;
+    'FlatList', 'Modal', 'TextInput', 'Pressable', 'Text', 'View', 'ReviewCard', 'MovieCard']) scope[name] = name;
   for (const key of Object.keys(api)) scope[key] = (...args) => api[key](...args);
   const context = vm.createContext(scope);
   vm.runInContext(code, context);
@@ -137,6 +147,17 @@ function screen(name, props = {}, authenticated = true) {
         await Promise.resolve();
         if (dirty) render();
       }
+    },
+    // Provar genrebytets korta väntetid utan att testerna behöver vänta på riktig tid.
+    async advance(milliseconds) {
+      now += milliseconds;
+      for (const [id, timer] of timers) {
+        if (timer.due <= now) {
+          timers.delete(id);
+          timer.callback();
+        }
+      }
+      await this.flush();
     },
     focus(value) {
       focused = value;
@@ -167,7 +188,7 @@ function text(root) {
   return text(root.children);
 }
 function button(app, label) {
-  const found = nodes(app.tree, 'Pressable').find(node => text(node) === label);
+  const found = nodes(app.tree, 'Pressable').find(node => text(node).trim() === label);
   assert.ok(found, `Knappen ${label} ska visas`);
   return found.props.onPress;
 }
@@ -540,34 +561,123 @@ test('titelsökningen validerar tomt fält och skickar titel och sida ett som ti
   assert.equal(card.destinations[0][1].movieId, movie.id);
 });
 
-test('Utforska kombinerar genre, år, betyg och sortering och tömmer gamla resultat vid ändring', async () => {
+test('genrerna ligger horisontellt och filterpanelen kan stängas med knapp och Androids tillbaka', async () => {
+  const app = screen('screens/SearchScreen');
+  await app.flush();
+  button(app, 'Utforska filmer')();
+  await app.flush();
+  assert.equal(nodes(app.tree, 'ScrollView')[0].props.horizontal, true);
+  assert.equal(nodes(app.tree, 'TextInput').length, 0);
+  assert.equal(nodes(app.tree, 'Modal').length, 0);
+  button(app, 'Filter')();
+  await app.flush();
+  assert.equal(nodes(app.tree, 'Modal').length, 1);
+  assert.equal(nodes(app.tree, 'TextInput')[0].props.accessibilityLabel, 'Utgivningsår');
+  nodes(app.tree, 'TextInput')[0].props.onChangeText('2020');
+  button(app, '8+')();
+  await app.flush();
+  nodes(app.tree, 'Modal')[0].props.onRequestClose();
+  await app.flush();
+  assert.equal(nodes(app.tree, 'Modal').length, 0);
+  assert.equal(app.destinations.length, 0);
+  button(app, 'Filter')();
+  await app.flush();
+  assert.equal(nodes(app.tree, 'TextInput')[0].props.value, '');
+  const allRatings = nodes(app.tree, 'Pressable').find(node => text(node).trim() === 'Alla betyg');
+  assert.equal(allRatings.props.accessibilityState.selected, true);
+  button(app, 'Stäng')();
+  await app.flush();
+  assert.equal(nodes(app.tree, 'Modal').length, 0);
+});
+
+test('snabba genrebyten skickar bara det sista genre-ID:t och markerar ett val', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
   app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
-  app.api.searchMovies = () => assert.fail('Utforska får inte anropa titelsökningen');
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
   button(app, 'Skräck')();
+  await app.flush();
+  await app.advance(100);
+  button(app, 'Action')();
+  await app.flush();
+  await app.advance(299);
+  assert.equal(calls.length, 0);
+  await app.advance(1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].genre, 28);
+  assert.equal(calls[0].sortBy, 'popular');
+  assert.equal(nodes(app.tree, 'FlatList')[0].props.data[0].id, movie.id);
+  const selected = nodes(app.tree, 'Pressable').filter(node => {
+    return node.props.accessibilityLabel?.startsWith('Genre:') && node.props.accessibilityState.selected;
+  });
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].props.accessibilityLabel, 'Genre: Action');
+});
+
+test('panelen kombinerar val med genre och nya genreval använder tillämpade filter', async () => {
+  const app = screen('screens/SearchScreen');
+  const calls = [];
+  app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
+  await app.flush();
+  button(app, 'Utforska filmer')();
+  await app.flush();
+  button(app, 'Skräck')();
+  await app.advance(300);
+  button(app, 'Filter')();
+  await app.flush();
   nodes(app.tree, 'TextInput')[0].props.onChangeText('2020');
   button(app, '7+')();
   button(app, 'Högst betyg')();
   await app.flush();
+  assert.equal(calls.length, 1);
+  assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 1);
   await button(app, 'Visa filmer')();
   await app.flush();
-  assert.equal(JSON.stringify(calls[0]), JSON.stringify({ sortBy: 'rating', genre: 27, year: 2020, minRating: 7 }));
-  assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 1);
+  assert.equal(nodes(app.tree, 'Modal').length, 0);
+  assert.equal(JSON.stringify(calls[1]), JSON.stringify({ sortBy: 'rating', genre: 27, year: 2020, minRating: 7 }));
   button(app, 'Action')();
   await app.flush();
   assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 0);
-  const selectedGenres = nodes(app.tree, 'Pressable').filter(node => {
-    return node.props.accessibilityLabel?.startsWith('Genre:') && node.props.accessibilityState.selected;
-  });
-  assert.equal(selectedGenres.length, 1);
-  assert.equal(selectedGenres[0].props.accessibilityLabel, 'Genre: Action');
+  await app.advance(300);
+  assert.equal(JSON.stringify(calls[2]), JSON.stringify({ sortBy: 'rating', genre: 28, year: 2020, minRating: 7 }));
 });
 
-test('Rensa filter återställer alla val och kräver ny hämtning', async () => {
+test('stängd panel behåller tidigare filter och resultat trots ändringar som inte tillämpats', async () => {
+  const app = screen('screens/SearchScreen');
+  const calls = [];
+  app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
+  await app.flush();
+  button(app, 'Utforska filmer')();
+  await app.flush();
+  button(app, 'Filter')();
+  await app.flush();
+  nodes(app.tree, 'TextInput')[0].props.onChangeText('2020');
+  await app.flush();
+  await button(app, 'Visa filmer')();
+  await app.flush();
+  button(app, 'Filter')();
+  await app.flush();
+  nodes(app.tree, 'TextInput')[0].props.onChangeText('2030');
+  button(app, '9+')();
+  button(app, 'Äldsta')();
+  await app.flush();
+  assert.equal(calls.length, 1);
+  assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 1);
+  button(app, 'Stäng')();
+  await app.flush();
+  button(app, 'Skräck')();
+  await app.advance(300);
+  assert.equal(calls[1].year, 2020);
+  assert.equal(calls[1].minRating, undefined);
+  assert.equal(calls[1].sortBy, 'popular');
+  button(app, 'Filter')();
+  await app.flush();
+  assert.equal(nodes(app.tree, 'TextInput')[0].props.value, '2020');
+});
+
+test('Rensa filter återställer genre, panel och tillämpade filter utan onödigt anrop', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
   app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
@@ -575,39 +685,48 @@ test('Rensa filter återställer alla val och kräver ny hämtning', async () =>
   button(app, 'Utforska filmer')();
   await app.flush();
   button(app, 'Skräck')();
+  await app.advance(300);
+  button(app, 'Filter')();
+  await app.flush();
   nodes(app.tree, 'TextInput')[0].props.onChangeText('2020');
   button(app, '8+')();
   button(app, 'Äldsta')();
   await app.flush();
   await button(app, 'Visa filmer')();
   await app.flush();
+  button(app, 'Filter')();
+  await app.flush();
   button(app, 'Rensa filter')();
   await app.flush();
-  assert.equal(calls.length, 1);
-  assert.equal(nodes(app.tree, 'TextInput')[0].props.value, '');
+  assert.equal(calls.length, 2);
   assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 0);
+  assert.equal(nodes(app.tree, 'TextInput')[0].props.value, '');
   for (const label of ['Alla', 'Alla betyg', 'Populärast']) {
-    const option = nodes(app.tree, 'Pressable').find(node => text(node) === label);
+    const option = nodes(app.tree, 'Pressable').find(node => text(node).trim() === label);
     assert.equal(option.props.accessibilityState.selected, true);
   }
   await button(app, 'Visa filmer')();
-  assert.equal(JSON.stringify(calls[1]), JSON.stringify({ sortBy: 'popular' }));
+  await app.flush();
+  assert.equal(JSON.stringify(calls[2]), JSON.stringify({ sortBy: 'popular' }));
 });
 
-test('Utforska avvisar ogiltiga år före API-anrop och accepterar båda årsgränserna', async () => {
+test('ogiltigt år behåller panelen och rätt årsgränser kan tillämpas', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
   app.api.discoverMovies = async filters => { calls.push(filters); return { results: [] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
+  button(app, 'Filter')();
+  await app.flush();
   const lastYear = new Date().getFullYear() + 5;
-  for (const year of ['1887', String(lastYear + 1), '2020.5', '2e3', '0x7e4', ' 2020', '2020 ', 'abc', '   ']) {
+  for (const year of ['1887', String(lastYear + 1), '2020.5', '2e3', '0x7e4', ' 2020', '2020 ', 'abc']) {
     nodes(app.tree, 'TextInput')[0].props.onChangeText(year);
     await app.flush();
     await button(app, 'Visa filmer')();
     await app.flush();
-    assert.ok(text(nodes(app.tree, 'FlatList')[0].props.ListEmptyComponent).includes('Ange ett årtal'));
+    assert.equal(nodes(app.tree, 'Modal').length, 1);
+    assert.ok(text(nodes(app.tree, 'Modal')[0]).includes('Ange ett årtal'));
   }
   assert.equal(calls.length, 0);
   for (const year of ['1888', String(lastYear), '']) {
@@ -615,31 +734,38 @@ test('Utforska avvisar ogiltiga år före API-anrop och accepterar båda årsgr�
     await app.flush();
     await button(app, 'Visa filmer')();
     await app.flush();
+    assert.equal(nodes(app.tree, 'Modal').length, 0);
+    button(app, 'Filter')();
+    await app.flush();
   }
   assert.equal(calls[0].year, 1888);
   assert.equal(calls[1].year, lastYear);
   assert.equal(calls[2].year, undefined);
 });
 
-test('Utforska visar laddning, spärrar dubbeltryck och hanterar tom lista och återförsök', async () => {
+test('Visa filmer spärrar dubbeltryck och behåller laddning, tom lista, API-fel och återförsök', async () => {
   const app = screen('screens/SearchScreen');
   let calls = 0, respond;
   app.api.discoverMovies = () => { calls++; return new Promise(resolve => { respond = resolve; }); };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
-  const search = button(app, 'Visa filmer');
-  const pending = search();
-  await search();
+  button(app, 'Filter')();
+  await app.flush();
+  const apply = button(app, 'Visa filmer');
+  apply();
+  apply();
   await app.flush();
   assert.equal(calls, 1);
+  assert.equal(nodes(app.tree, 'Modal').length, 0);
   assert.equal(nodes(app.tree, 'ActivityIndicator').length, 1);
   respond({ results: [] });
-  await pending;
   await app.flush();
   assert.ok(text(nodes(app.tree, 'FlatList')[0].props.ListEmptyComponent).includes('Inga filmer matchar filtren'));
   app.api.discoverMovies = async () => { throw new Error('Tillfälligt nätverksfel'); };
-  await button(app, 'Visa filmer')();
+  button(app, 'Filter')();
+  await app.flush();
+  button(app, 'Visa filmer')();
   await app.flush();
   assert.ok(text(nodes(app.tree, 'FlatList')[0].props.ListEmptyComponent).includes('Tillfälligt nätverksfel'));
   app.api.discoverMovies = async () => ({ results: [movie] });
@@ -648,7 +774,7 @@ test('Utforska visar laddning, spärrar dubbeltryck och hanterar tom lista och �
   assert.equal(nodes(app.tree, 'FlatList')[0].props.data[0].id, movie.id);
 });
 
-test('genrelistans laddning och fel har återförsök utan att blockera övriga filter', async () => {
+test('genrelistans laddning och fel har kvar sitt återförsök', async () => {
   const app = screen('screens/SearchScreen');
   let fail;
   app.api.getMovieGenres = () => new Promise((_resolve, reject) => { fail = reject; });
@@ -666,7 +792,7 @@ test('genrelistans laddning och fel har återförsök utan att blockera övriga 
   assert.equal(nodes(app.tree, 'ActivityIndicator').length, 0);
 });
 
-test('sent svar från titelsökning får inte skriva över Utforska eller visa ett gammalt fel', async () => {
+test('sena titelsvar och fel får inte skriva över resultat från ett nytt sökläge', async () => {
   for (const fail of [false, true]) {
     const app = screen('screens/SearchScreen');
     let resolve, reject, signal;
@@ -674,16 +800,16 @@ test('sent svar från titelsökning får inte skriva över Utforska eller visa e
       signal = options.signal;
       return new Promise((success, failure) => { resolve = success; reject = failure; });
     };
-    const discovered = { ...movie, id: 155 };
-    app.api.discoverMovies = async () => ({ results: [discovered] });
+    app.api.discoverMovies = async () => ({ results: [{ ...movie, id: 155 }] });
     await app.flush();
     nodes(app.tree, 'TextInput')[0].props.onChangeText('Batman');
     await app.flush();
     const pending = button(app, 'Sök')();
     button(app, 'Utforska filmer')();
     await app.flush();
+    button(app, 'Alla')();
+    await app.advance(300);
     assert.equal(signal.aborted, true);
-    await button(app, 'Visa filmer')();
     if (fail) reject(new Error('Gammalt fel'));
     else resolve({ results: [movie] });
     await pending;
@@ -693,7 +819,7 @@ test('sent svar från titelsökning får inte skriva över Utforska eller visa e
   }
 });
 
-test('filterändring och Rensa filter avbryter en pågående Discover-hämtning', async () => {
+test('genrebyte avbryter förra hämtningen och sena svar påverkar inte nya filmer', async () => {
   const app = screen('screens/SearchScreen');
   const signals = [], responses = [];
   app.api.discoverMovies = (_filters, options) => {
@@ -703,54 +829,73 @@ test('filterändring och Rensa filter avbryter en pågående Discover-hämtning'
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
-  const first = button(app, 'Visa filmer')();
-  button(app, '7+')();
-  await app.flush();
+  button(app, 'Skräck')();
+  await app.advance(300);
+  button(app, 'Action')();
   assert.equal(signals[0].aborted, true);
-  const second = button(app, 'Visa filmer')();
-  button(app, 'Rensa filter')();
+  await app.advance(300);
+  responses[1]({ results: [{ ...movie, id: 155 }] });
   await app.flush();
-  assert.equal(signals[1].aborted, true);
   responses[0]({ results: [movie] });
-  responses[1]({ results: [movie] });
-  await Promise.all([first, second]);
   await app.flush();
-  assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 0);
+  assert.equal(nodes(app.tree, 'FlatList')[0].props.data[0].id, 155);
 });
 
-test('lägesbyte och blur avbryter genrer och filmer utan att sena svar tar över', async () => {
+test('Rensa filter, lägesbyte och avmontering stoppar väntande genreanrop', async () => {
   const app = screen('screens/SearchScreen');
-  const genreSignals = [], genreReplies = [];
-  let movieSignal, reply;
-  app.api.getMovieGenres = options => {
-    genreSignals.push(options.signal);
-    return new Promise(resolve => genreReplies.push(resolve));
-  };
-  app.api.discoverMovies = (_filters, options) => {
-    movieSignal = options.signal;
-    return new Promise(resolve => { reply = resolve; });
-  };
+  let calls = 0;
+  app.api.discoverMovies = async () => { calls++; return { results: [] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
+  await app.flush();
+  button(app, 'Skräck')();
+  await app.flush();
+  button(app, 'Filter')();
+  await app.flush();
+  button(app, 'Rensa filter')();
+  button(app, 'Stäng')();
+  await app.flush();
+  await app.advance(300);
+  assert.equal(calls, 0);
+  button(app, 'Action')();
   await app.flush();
   button(app, 'Sök titel')();
   await app.flush();
-  assert.equal(genreSignals[0].aborted, true);
+  await app.advance(300);
+  assert.equal(calls, 0);
   button(app, 'Utforska filmer')();
   await app.flush();
-  const pending = button(app, 'Visa filmer')();
+  button(app, 'Skräck')();
+  app.unmount();
+  await app.advance(300);
+  assert.equal(calls, 0);
+});
+
+test('blur stänger panelen och avbryter både genrer och pågående filmhämtning', async () => {
+  const app = screen('screens/SearchScreen');
+  let genreSignal, genreReply, movieSignal, movieReply;
+  app.api.getMovieGenres = options => {
+    genreSignal = options.signal;
+    return new Promise(resolve => { genreReply = resolve; });
+  };
+  app.api.discoverMovies = (_filters, options) => {
+    movieSignal = options.signal;
+    return new Promise(resolve => { movieReply = resolve; });
+  };
+  await app.flush();
+  button(app, 'Utforska filmer')();
+  await app.flush();
+  button(app, 'Alla')();
+  await app.advance(300);
+  button(app, 'Filter')();
+  await app.flush();
   app.focus(false);
   await app.flush();
-  assert.equal(genreSignals[1].aborted, true);
+  assert.equal(genreSignal.aborted, true);
   assert.equal(movieSignal.aborted, true);
-  genreReplies.forEach(resolve => resolve([{ id: 35, name: 'Gammal genre' }]));
-  reply({ results: [movie] });
-  await pending;
+  assert.equal(nodes(app.tree, 'Modal').length, 0);
+  genreReply([{ id: 35, name: 'Gammal genre' }]);
+  movieReply({ results: [movie] });
   await app.flush();
   assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 0);
-  app.api.getMovieGenres = async () => [{ id: 27, name: 'Ny genre' }];
-  app.focus(true);
-  await app.flush();
-  button(app, 'Ny genre');
-  assert.equal(text(nodes(app.tree, 'FlatList')[0].props.ListHeaderComponent).includes('Gammal genre'), false);
 });
