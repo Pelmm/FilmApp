@@ -1,5 +1,15 @@
 const TMDB_URL = 'https://api.themoviedb.org/3';
 const TIMEOUT_MS = 8000;
+const GENRE_CACHE_MS = 60 * 60 * 1000;
+let cachedGenres = null;
+let genresExpireAt = 0;
+
+const discoverSortOptions = {
+  popular: 'popularity.desc',
+  rating: 'vote_average.desc',
+  newest: 'primary_release_date.desc',
+  oldest: 'primary_release_date.asc',
+};
 
 // Lägger till HTTP-status så att filmroutern kan skicka rätt felsvar.
 function tmdbError(message, status) {
@@ -191,6 +201,61 @@ export async function searchMovies(query, page) {
   });
 
   return movieList(data);
+}
+
+// Hämtar filmer med de filter användaren har valt, på den begärda sidan.
+export async function discoverMovies({ genre, year, minRating, sortBy = 'popular', page = 1 }) {
+  const params = {
+    page,
+    include_adult: false,
+    sort_by: discoverSortOptions[sortBy],
+  };
+  if (genre !== undefined) {
+    params.with_genres = genre;
+  }
+  if (year !== undefined) {
+    params.primary_release_year = year;
+  }
+  if (minRating !== undefined) {
+    params['vote_average.gte'] = minRating;
+  }
+  // Minst 100 röster ger ett mer användbart underlag när betyg styr resultatet.
+  if (sortBy === 'rating' || minRating !== undefined) {
+    params['vote_count.gte'] = 100;
+  }
+
+  const data = await fetchTmdb('discover/movie', params);
+  const movies = movieList(data);
+  if (!Number.isSafeInteger(data.total_results) || data.total_results < 0) {
+    throw tmdbError('Filmtjänsten skickade ett ogiltigt antal filmer.', 502);
+  }
+  // Behåller samma fältnamn som våra befintliga filmlistor.
+  return { ...movies, total_results: data.total_results };
+}
+
+export async function getMovieGenres() {
+  // Återanvänder en kontrollerad genrelista i en timme för att minska TMDB-anropen.
+  if (cachedGenres && Date.now() < genresExpireAt) {
+    return cachedGenres;
+  }
+  const data = await fetchTmdb('genre/movie/list');
+  if (!Array.isArray(data.genres)) {
+    throw tmdbError('Filmtjänsten skickade en ogiltig genrelista.', 502);
+  }
+
+  const genres = [];
+  for (const genre of data.genres) {
+    if (!genre || !Number.isSafeInteger(genre.id) || genre.id < 1) {
+      throw tmdbError('Filmtjänsten skickade en ogiltig genrelista.', 502);
+    }
+    if (typeof genre.name !== 'string' || !genre.name.trim()) {
+      throw tmdbError('Filmtjänsten skickade en ogiltig genrelista.', 502);
+    }
+    genres.push({ id: genre.id, name: genre.name.trim() });
+  }
+  cachedGenres = genres;
+  genresExpireAt = Date.now() + GENRE_CACHE_MS;
+  return genres;
 }
 
 export async function getMovieDetails(id) {
