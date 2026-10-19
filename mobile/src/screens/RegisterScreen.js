@@ -26,6 +26,7 @@ export default function RegisterScreen({ navigation }) {
   const [error, setError] = useState('');
   const request = useRef(null);
 
+  // Rensar lösenorden och avbryter anropet när skärmen lämnas.
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
       request.current?.abort();
@@ -44,9 +45,11 @@ export default function RegisterScreen({ navigation }) {
   }, [navigation]);
 
   async function handleRegister() {
+    // Stoppar flera registreringar från snabba knapptryck.
     if (request.current) {
       return;
     }
+    // Kontrollerar formuläret innan uppgifterna skickas till servern.
     if (
       !username.trim() ||
       !email.trim() ||
@@ -77,6 +80,7 @@ export default function RegisterScreen({ navigation }) {
         { signal: controller.signal }
       );
 
+      // Registrering skapar kontot. Användaren får sedan logga in själv.
       if (!controller.signal.aborted) {
         setRegistered(true);
         setPassword('');

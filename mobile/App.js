@@ -4,6 +4,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 
 export default function App() {
+  // Delar inloggning och information om systemets kanter med alla skärmar.
   return (
     <SafeAreaProvider>
       <AuthProvider>

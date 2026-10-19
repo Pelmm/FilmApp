@@ -2,6 +2,7 @@ import { StyleSheet } from 'react-native';
 import colors from './colors';
 import fonts from './fonts';
 
+// Samlar stilar som återanvänds på flera skärmar.
 const globalStyles = StyleSheet.create({
   container: {
     flex: 1,

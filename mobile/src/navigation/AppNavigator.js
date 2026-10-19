@@ -26,6 +26,7 @@ export default function AppNavigator() {
   const [currentScreen, setCurrentScreen] = useState('Home');
 
   function updateCurrentScreen() {
+    // Används för att markera rätt knapp i den nedersta navigationsraden.
     const route = navigationRef.getCurrentRoute();
 
     if (route) {
@@ -40,6 +41,7 @@ export default function AppNavigator() {
   }
 
   function openMyReviews() {
+    // Utloggade användare får först öppna inloggningen.
     if (isAuthenticated) {
       openScreen('MyReviews');
     } else {
@@ -51,6 +53,7 @@ export default function AppNavigator() {
   const searchSelected = currentScreen === 'Search';
   const reviewsSelected = ['Login', 'Register', 'MyReviews', 'ReviewEditor'].includes(currentScreen);
 
+  // Väntar på den sparade sessionen innan skärmarna visas.
   if (restoring) {
     return (
       <View style={globalStyles.placeholderContainer}>
@@ -60,6 +63,7 @@ export default function AppNavigator() {
     );
   }
 
+  // Skyddade skärmar finns bara i navigatorn medan användaren är inloggad.
   return (
     <NavigationContainer
       ref={navigationRef}

@@ -95,6 +95,7 @@ test('nätverksfel översätts till ett begripligt meddelande', async (t) => {
   });
 });
 
+// Efterliknar ett anrop som bara avslutas när det avbryts eller når tidsgränsen.
 function pendingFetch(_url, { signal }) {
   return new Promise((_resolve, reject) => {
     const abort = () => reject(new DOMException('Aborted', 'AbortError'));
@@ -151,6 +152,7 @@ test('timeout och extern listener städas efter ett lyckat anrop', async (t) => 
 });
 
 async function startServer(port = 0) {
+  // Port 0 låter systemet välja en ledig port till den lokala testservern.
   const server = app.listen(port, '127.0.0.1');
   await once(server, 'listening');
   return server;

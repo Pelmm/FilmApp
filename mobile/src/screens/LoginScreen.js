@@ -24,6 +24,7 @@ export default function LoginScreen({ navigation }) {
   const [error, setError] = useState('');
   const request = useRef(null);
 
+  // Avbryter anropet och rensar lösenordet när användaren lämnar skärmen.
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
       request.current?.abort();
@@ -40,6 +41,7 @@ export default function LoginScreen({ navigation }) {
   }, [navigation]);
 
   async function handleLogin() {
+    // Stoppar flera inloggningsanrop om knappen trycks snabbt.
     if (request.current) {
       return;
     }
@@ -55,6 +57,7 @@ export default function LoginScreen({ navigation }) {
     Keyboard.dismiss();
 
     try {
+      // AuthContext sköter både inloggningen och den säkra lagringen.
       await signIn(
         { email, password },
         { signal: controller.signal }
@@ -68,6 +71,7 @@ export default function LoginScreen({ navigation }) {
         setError(error.message);
       }
     } finally {
+      // Ändrar bara laddningsstatus för det anrop som fortfarande hör till skärmen.
       if (request.current === controller) {
         request.current = null;
         if (!controller.signal.aborted) {

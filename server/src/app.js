@@ -8,12 +8,15 @@ const app = express();
 
 // Öppen CORS för lokal utveckling; begränsa ursprung före publicering.
 app.use(cors());
+// Läser JSON från mobilens anrop så att uppgifterna finns i req.body.
 app.use(express.json());
 
+// Visar att API:et svarar utan att behöva kontakta databasen eller TMDB.
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Samlar film-, konto- och recensionsanrop under varsin API-adress.
 app.use('/api/movies', moviesRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/reviews', reviewsRouter);

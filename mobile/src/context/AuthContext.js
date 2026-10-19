@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { getCurrentUser, loginUser } from '../services/api';
 
+// Delar den aktiva sessionen mellan skärmarna utan att skicka JWT i navigationen.
 export const AuthContext = createContext(null);
 const SESSION_KEY = 'filmapp.session';
 
@@ -12,13 +13,16 @@ export function AuthProvider({ children }) {
   const [message, setMessage] = useState('');
   const [canRetry, setCanRetry] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // Stoppar samtidiga ändringar i den sparade inloggningen.
   const busy = useRef(false);
+  // Låter även äldre anrop kontrollera vilken session som gäller nu.
   const currentSession = useRef(null);
   currentSession.current = session;
 
   useEffect(() => {
     const controller = new AbortController();
 
+    // Läser sparad inloggning när appen startar eller användaren försöker igen.
     async function restoreSession() {
       setRestoring(true);
       setMessage('');
@@ -40,6 +44,7 @@ export function AuthProvider({ children }) {
           saved = null;
         }
 
+        // Tar bort trasiga sparade uppgifter i stället för att använda dem.
         if (
           typeof saved?.token !== 'string' ||
           !saved.token ||
@@ -61,6 +66,7 @@ export function AuthProvider({ children }) {
           return;
         }
 
+        // Servern kontrollerar token och hämtar aktuella användaruppgifter.
         const user = await getCurrentUser(saved.token, { signal: controller.signal });
         if (!controller.signal.aborted) {
           setSession({ token: saved.token, expiresAt: saved.expiresAt, user });
@@ -166,6 +172,7 @@ export function AuthProvider({ children }) {
         throw new Error('Kunde inte spara inloggningen säkert. Försök igen.');
       }
 
+      // Sparningen kan hinna bli klar efter att användaren lämnat inloggningen.
       if (options?.signal?.aborted || Date.parse(data.expiresAt) <= Date.now()) {
         try {
           await SecureStore.deleteItemAsync(SESSION_KEY);
@@ -190,6 +197,7 @@ export function AuthProvider({ children }) {
 
     try {
       try {
+        // Tar bort den sparade token innan appens aktiva session rensas.
         await SecureStore.deleteItemAsync(SESSION_KEY);
       } catch {
         throw new Error('Kunde inte logga ut säkert. Försök igen.');

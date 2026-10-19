@@ -25,6 +25,7 @@ let deleteReview;
 let sortReviews;
 let populateReviews;
 
+// Efterliknar ett dokument med save och populate utan att något sparas i databasen.
 function reviewDocument(t, fields = {}) {
   const review = {
     _id: new Review()._id,

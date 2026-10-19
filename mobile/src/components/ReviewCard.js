@@ -13,8 +13,10 @@ export default function ReviewCard({ review, movieTitle, showMovieLink = false, 
   const [deleting, setDeleting] = useState(false);
   const request = useRef(null);
   const confirming = useRef(false);
+  // Visar ägarens knappar här. Servern kontrollerar också vem som får ändra.
   const isOwner = isAuthenticated && review.user?.id === user.id;
 
+  // Avbryter radering och gamla bekräftelser när skärmen lämnas.
   useEffect(() => {
     function cancelRequest() {
       confirming.current = false;
@@ -32,6 +34,7 @@ export default function ReviewCard({ review, movieTitle, showMovieLink = false, 
   }, [navigation, token]);
 
   async function removeReview() {
+    // Raderar bara efter bekräftelse och startar inte flera anrop samtidigt.
     if (!confirming.current || request.current || !navigation.isFocused()) {
       return;
     }
@@ -42,6 +45,7 @@ export default function ReviewCard({ review, movieTitle, showMovieLink = false, 
     try {
       await deleteReview(token, review.id, { signal: controller.signal });
       if (!controller.signal.aborted) {
+        // Ber listan hämta aktuella recensioner efter raderingen.
         onChanged();
       }
     } catch (error) {
@@ -68,6 +72,7 @@ export default function ReviewCard({ review, movieTitle, showMovieLink = false, 
   }
 
   function confirmDelete() {
+    // Hindrar flera bekräftelserutor från snabba tryck.
     if (confirming.current || request.current) {
       return;
     }

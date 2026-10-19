@@ -23,6 +23,7 @@ export default function MovieCard({ movie }) {
 
   let showPoster = Boolean(movie.poster_path);
 
+  // Visar reservtext även om en angiven bild inte går att ladda.
   if (imageFailed) {
     showPoster = false;
   }
@@ -45,6 +46,7 @@ export default function MovieCard({ movie }) {
     );
   }
 
+  // Skickar filmens ID så att detaljskärmen kan hämta rätt film.
   return (
     <Pressable
       style={styles.card}

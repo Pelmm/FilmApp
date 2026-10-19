@@ -118,6 +118,7 @@ function screen(name, props = {}, authenticated = true) {
   return {
     auth, api, navigation, destinations, alerts,
     get tree() { return tree; },
+    // Låter väntande löften och ändringar i testets skärm hinna köras klart.
     async flush() {
       for (let i = 0; i < 30; i++) {
         await Promise.resolve();

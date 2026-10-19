@@ -18,8 +18,10 @@ export default function MyReviewsScreen() {
   const [attempt, setAttempt] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState('');
+  // Behåller hämtade filmtitlar så att de inte behöver hämtas vid varje återbesök.
   const titleCache = useRef({});
 
+  // Hämtar den egna listan igen när skärmen öppnas eller en recension tas bort.
   useEffect(() => {
     setReviews([]);
     setError('');
@@ -31,6 +33,7 @@ export default function MyReviewsScreen() {
 
     async function loadReviews() {
       try {
+        // Servern använder JWT för att välja användarens recensioner.
         const data = await getMyReviews(token, { signal: controller.signal });
         if (controller.signal.aborted) {
           return;
@@ -61,6 +64,7 @@ export default function MyReviewsScreen() {
         if (controller.signal.aborted) {
           return;
         }
+        // Rensar bara sessionen vid 401, inte vid ett tillfälligt nätverksfel.
         if (error.status === 401) {
           await invalidateSession(token);
         } else {
@@ -74,6 +78,7 @@ export default function MyReviewsScreen() {
     }
 
     loadReviews();
+    // Avbryter både recensionshämtningen och eventuell hämtning av filmtitlar.
     return () => controller.abort();
   }, [isFocused, token, attempt]);
 
@@ -109,6 +114,7 @@ export default function MyReviewsScreen() {
     </View>
   );
 
+  // En tom lista kan bero på laddning eller fel, inte bara på att recensioner saknas.
   let emptyList = <Text style={styles.message}>Du har inga recensioner ännu.</Text>;
   if (loading) {
     emptyList = <ActivityIndicator color={colors.accent} accessibilityLabel="Hämtar dina recensioner" />;

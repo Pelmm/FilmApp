@@ -118,6 +118,7 @@ test('båda auth-anropen hanterar nätverksfel och serverfel', async (t) => {
   });
 });
 
+// Låter testerna prova timeout och avbrytning utan att kontakta någon server.
 function pendingFetch(_url, { signal }) {
   return new Promise((_resolve, reject) => {
     const abort = () => reject(new DOMException('Aborted', 'AbortError'));

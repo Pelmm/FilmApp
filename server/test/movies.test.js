@@ -163,6 +163,7 @@ test('ogiltig JSON och felaktig liststruktur ger 502', async (t) => {
 });
 
 test('långsamma TMDB-anrop avbryts och ger timeout 504', async (t) => {
+  // Flyttar testklockan framåt i stället för att vänta åtta riktiga sekunder.
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.mock.method(globalThis, 'fetch', (_url, { signal }) => new Promise((_resolve, reject) => {
     signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });

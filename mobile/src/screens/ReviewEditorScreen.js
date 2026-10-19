@@ -22,6 +22,7 @@ const ratings = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 export default function ReviewEditorScreen({ route, navigation }) {
   const { movieId, movieTitle, review } = route.params || {};
   const { user, token, isAuthenticated, invalidateSession } = useContext(AuthContext);
+  // Samma formulär används för nya recensioner och förifyllda egna recensioner.
   const [editingReview, setEditingReview] = useState(review || null);
   const [rating, setRating] = useState(review?.rating || 0);
   const [text, setText] = useState(review?.text || '');
@@ -30,6 +31,7 @@ export default function ReviewEditorScreen({ route, navigation }) {
   const [error, setError] = useState('');
   const request = useRef(null);
 
+  // Avbryter pågående sparning när användaren lämnar formuläret.
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
       request.current?.abort();
@@ -66,6 +68,7 @@ export default function ReviewEditorScreen({ route, navigation }) {
   }
 
   async function handleSave() {
+    // Stoppar dubbeltryck och ny sparning efter ett lyckat resultat.
     if (request.current || saved) {
       return;
     }
@@ -81,6 +84,7 @@ export default function ReviewEditorScreen({ route, navigation }) {
       setError('Du kan bara redigera dina egna recensioner.');
       return;
     }
+    // Kontrollerar betyg och text innan något skickas till servern.
     const validationError = getReviewError(rating, text);
     if (validationError) {
       setError(validationError);
@@ -94,6 +98,7 @@ export default function ReviewEditorScreen({ route, navigation }) {
     Keyboard.dismiss();
 
     try {
+      // Ändrar en befintlig recension med PATCH eller skapar en ny med POST.
       if (editingReview) {
         await updateReview(token, editingReview.id, { rating, text }, { signal: controller.signal });
       } else {

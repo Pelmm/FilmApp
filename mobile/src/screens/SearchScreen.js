@@ -22,6 +22,7 @@ export default function SearchScreen({ navigation }) {
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Skiljer en tom söklista från att användaren ännu inte har sökt.
   const [hasSearched, setHasSearched] = useState(false);
   const request = useRef(null);
 
@@ -59,6 +60,7 @@ export default function SearchScreen({ navigation }) {
 
     const controller = new AbortController();
 
+    // Tömmer tidigare resultat så att de inte visas som svar på den nya sökningen.
     request.current = controller;
     setLoading(true);
     setError('');
@@ -69,6 +71,7 @@ export default function SearchScreen({ navigation }) {
     try {
       const data = await searchMovies(searchQuery, 1, { signal: controller.signal });
 
+      // Ett sent svar ska inte uppdatera en sökning som har avbrutits.
       if (!controller.signal.aborted) {
         setMovies(data.results);
       }
@@ -77,6 +80,7 @@ export default function SearchScreen({ navigation }) {
         setError(error.message);
       }
     } finally {
+      // Ett gammalt anrop får inte ändra statusen för ett nyare anrop.
       if (request.current === controller) {
         request.current = null;
         if (!controller.signal.aborted) {

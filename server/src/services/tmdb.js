@@ -1,6 +1,7 @@
 const TMDB_URL = 'https://api.themoviedb.org/3';
 const TIMEOUT_MS = 8000;
 
+// Lägger till HTTP-status så att filmroutern kan skicka rätt felsvar.
 function tmdbError(message, status) {
   const error = new Error(message);
 
@@ -9,6 +10,7 @@ function tmdbError(message, status) {
 }
 
 async function fetchTmdb(path, params = {}) {
+  // TMDB-token används bara på servern och skickas inte till mobilappen.
   const token = process.env.TMDB_ACCESS_TOKEN;
 
   if (!token?.trim()) {
@@ -17,12 +19,14 @@ async function fetchTmdb(path, params = {}) {
 
   const url = new URL(`${TMDB_URL}/${path}`);
 
+  // Begär svensk filmtext och lägger till parametrar utan att bygga URL-text för hand.
   url.searchParams.set('language', 'sv-SE');
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
 
   const controller = new AbortController();
+  // Avbryter anropet om TMDB tar för lång tid på sig att svara.
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
@@ -43,6 +47,7 @@ async function fetchTmdb(path, params = {}) {
       throw tmdbError('Kunde inte nå filmtjänsten. Försök igen senare.', 502);
     }
 
+    // Översätter TMDB:s felsvar till begripliga meddelanden för vår app.
     if (response.status === 404) {
       throw tmdbError('Filmen hittades inte.', 404);
     }
@@ -76,6 +81,7 @@ async function fetchTmdb(path, params = {}) {
   }
 }
 
+// Tillåter bara ett filnamn efter första snedstrecket, inte adresser eller mappar.
 function getPosterPath(value) {
   if (typeof value !== 'string') {
     return null;
@@ -105,6 +111,7 @@ function getPosterPath(value) {
   return '/' + encodeURIComponent(filename);
 }
 
+// Jämför med det tolkade datumet för att kräva ett verkligt datum i formatet år-månad-dag.
 function isValidReleaseDate(value) {
   if (typeof value !== 'string') {
     return false;
@@ -118,6 +125,7 @@ function isValidReleaseDate(value) {
   return date.toISOString().slice(0, 10) === value;
 }
 
+// Väljer filmkortets fält och ger reservvärden när filmuppgifter saknas eller är ogiltiga.
 function movieSummary(movie) {
   if (
     !movie ||
@@ -151,6 +159,7 @@ function movieSummary(movie) {
   return summary;
 }
 
+// Kontrollerar listans form innan varje film görs om till vårt eget svarsformat.
 function movieList(data) {
   if (
     !Array.isArray(data.results) ||
@@ -187,6 +196,7 @@ export async function searchMovies(query, page) {
 export async function getMovieDetails(id) {
   const data = await fetchTmdb(`movie/${id}`);
 
+  // Svaret måste gälla just den film som användaren bad om.
   if (data.id !== id) {
     throw tmdbError('Filmtjänsten skickade ogiltig filmdata.', 502);
   }

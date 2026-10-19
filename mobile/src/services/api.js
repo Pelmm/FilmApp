@@ -1,5 +1,6 @@
 const REQUEST_TIMEOUT_MS = 10000;
 
+// Kontrollerar backendadressen och sätter ihop den med den endpoint som ska anropas.
 export function getApiUrl(path, baseUrl = process.env.EXPO_PUBLIC_API_URL) {
   if (
     typeof baseUrl !== 'string' ||
@@ -42,6 +43,7 @@ export function getApiUrl(path, baseUrl = process.env.EXPO_PUBLIC_API_URL) {
   return `${address}/${path}`;
 }
 
+// Gemensam hantering av JSON, timeout och fel för appens API-anrop.
 async function getJson(path, {
   signal,
   timeoutMs = REQUEST_TIMEOUT_MS,
@@ -53,6 +55,7 @@ async function getJson(path, {
   const controller = new AbortController();
   const abortRequest = () => controller.abort();
 
+  // Skärmen och tidsgränsen kan båda avbryta samma nätverksanrop.
   signal?.addEventListener('abort', abortRequest);
   if (signal?.aborted) {
     controller.abort();
@@ -73,12 +76,14 @@ async function getJson(path, {
     request.body = JSON.stringify(body);
   }
 
+  // Skyddade anrop skickar JWT i headern, inte i adressen.
   if (token) {
     request.headers.Authorization = `Bearer ${token}`;
   }
 
   try {
     response = await fetch(url, request);
+    // Lyckad radering har ingen JSON att läsa.
     if (response.status === 204) {
       return null;
     }
@@ -95,7 +100,7 @@ async function getJson(path, {
     }
     return data;
   } catch (error) {
-    // Avmontering ska avbryta tyst; timeout ska ge ett begripligt fel.
+    // Skärmen kan ignorera avbrutna anrop, medan timeout får ett eget felmeddelande.
     if (signal?.aborted) {
       throw error;
     }
@@ -109,6 +114,7 @@ async function getJson(path, {
         'Kunde inte nå servern. Kontrollera att backend är igång och att backendadressen och nätverket stämmer. Försök igen.'
       );
     }
+    // Behåller HTTP-status även om ett felsvar inte innehåller giltig JSON.
     if (data === undefined) {
       if (!response.ok) {
         const error = new Error(`Servern svarade med HTTP ${response.status}. Försök igen.`);
@@ -119,6 +125,7 @@ async function getJson(path, {
     }
     throw error;
   } finally {
+    // Städar även när anropet misslyckas eller avbryts.
     clearTimeout(timeout);
     signal?.removeEventListener('abort', abortRequest);
   }
@@ -154,6 +161,7 @@ export async function searchMovies(query, page = 1, options) {
     throw new Error('Ange ett sökord.');
   }
 
+  // Kodar sökordet så att specialtecken inte ändrar URL-parametrarna.
   const data = await getJson(
     `movies/search?query=${encodeURIComponent(query.trim())}&page=${encodeURIComponent(page)}`,
     options
@@ -180,6 +188,7 @@ export async function getMovieDetails(id, options) {
   return data;
 }
 
+// Kontrollerar användarsvaret och väljer bara de fält som appen ska använda.
 function getUser(data) {
   if (
     typeof data?.id !== 'string' ||
@@ -203,6 +212,7 @@ function getAuthUser(data) {
   return getUser(data.user);
 }
 
+// Trimmar namn och e-post men låter lösenordet skickas oförändrat.
 export async function registerUser({ username, email, password }, options) {
   const data = await getJson('auth/register', {
     ...options,
@@ -241,11 +251,13 @@ export async function loginUser({ email, password }, options) {
   };
 }
 
+// Kontrollerar den sparade inloggningen mot backend.
 export async function getCurrentUser(token, options) {
   const data = await getJson('auth/me', { ...options, token });
   return getUser(data);
 }
 
+// Stoppar skyddade anrop direkt om token saknas.
 function requireToken(token) {
   if (typeof token !== 'string' || !token) {
     const error = new Error('Logga in för att hantera recensioner.');
@@ -268,6 +280,7 @@ function savedReview(data) {
   return data.review;
 }
 
+// Ger formuläret ett felmeddelande om betyget eller den trimmade texten är ogiltig.
 export function getReviewError(rating, text) {
   if (!Number.isInteger(rating) || rating < 1 || rating > 10) {
     return 'Välj ett heltalsbetyg mellan 1 och 10.';
@@ -288,6 +301,7 @@ export async function getMovieReviews(movieId, options) {
   return reviewList(await getJson(`reviews/movie/${movieId}`, options));
 }
 
+// Servern väljer användarens recensioner utifrån JWT, inte ett ID från formuläret.
 export async function getMyReviews(token, options) {
   requireToken(token);
   return reviewList(await getJson('reviews/mine', { ...options, token }));
@@ -302,6 +316,7 @@ export async function createReview(token, { movieId, rating, text }, options) {
   if (error) {
     throw new Error(error);
   }
+  // Skickar bara film-ID, betyg och text. Servern bestämmer ägaren.
   const data = await getJson('reviews', {
     ...options,
     token,
@@ -320,6 +335,7 @@ export async function updateReview(token, id, { rating, text }, options) {
   if (error) {
     throw new Error(error);
   }
+  // Ändrar bara betyg och text; film och ägare ska behållas.
   const data = await getJson(`reviews/${encodeURIComponent(id)}`, {
     ...options,
     token,

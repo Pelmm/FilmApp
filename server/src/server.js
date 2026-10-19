@@ -1,3 +1,4 @@
+// Läser serverns miljövariabler från .env vid start.
 import 'dotenv/config';
 import { disconnect } from 'mongoose';
 import app from './app.js';
@@ -34,6 +35,7 @@ async function startServer() {
     await User.init();
     await Review.init();
 
+    // Lyssnar på alla nätverksadresser så att även emulatorn kan nå API:et.
     const server = app.listen(port, '0.0.0.0', () => {
       console.log(`FilmApp API körs på http://localhost:${port}/api/health`);
     });
@@ -46,6 +48,7 @@ async function startServer() {
     console.error(
       'Kunde inte starta FilmApp API. Kontrollera MongoDB-anslutningen och databasens index.'
     );
+    // Stänger en eventuell databasanslutning om starten misslyckas.
     await disconnect();
     process.exitCode = 1;
   }

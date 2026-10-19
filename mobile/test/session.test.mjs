@@ -123,6 +123,7 @@ function sessionApp(stored) {
         if (dirty) render();
       }
     },
+    // Provar utgångstid och återkomst från bakgrunden utan att vänta på riktig tid.
     async advance(milliseconds, foreground = false) {
       now += milliseconds;
       if (foreground) {

@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
+// Avvisar andra tecken än siffror innan film-ID:t görs om till ett tal.
 function getMovieId(value) {
   for (const character of value) {
     if (!'0123456789'.includes(character)) {
@@ -19,11 +20,13 @@ function getMovieId(value) {
   return movieId;
 }
 
+// Kontrollerar hela recensionen vid POST och bara skickade ändringar vid PATCH.
 function validateReview(body, partial = false) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return 'Skicka recensionsuppgifterna som ett JSON-objekt.';
   }
 
+  // Klienten får inte välja ägare eller byta film när recensionen redigeras.
   let allowedFields = ['movieId', 'rating', 'text'];
   if (partial) {
     allowedFields = ['rating', 'text'];
@@ -59,6 +62,7 @@ function validateReview(body, partial = false) {
 }
 
 function reviewResponse(review) {
+  // En recension kan finnas kvar även om dess användare har tagits bort.
   let user = { id: null, username: 'Borttagen användare' };
   if (review.user) {
     user = { id: String(review.user._id), username: review.user.username };
@@ -76,6 +80,7 @@ function reviewResponse(review) {
   };
 }
 
+// Filmens recensioner är publika och visas med de nyaste först.
 router.get('/movie/:movieId', async (req, res) => {
   const movieId = getMovieId(req.params.movieId);
   if (movieId === null) {
@@ -89,6 +94,7 @@ router.get('/movie/:movieId', async (req, res) => {
   res.json({ reviews: reviews.map(reviewResponse) });
 });
 
+// Hämtar bara recensioner som tillhör användaren från den verifierade JWT:n.
 router.get('/mine', requireAuth, async (req, res) => {
   const reviews = await Review.find({ user: req.user._id })
     .sort({ createdAt: -1, _id: -1 })
@@ -103,6 +109,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(400).json({ error });
   }
 
+  // Ägaren kommer från inloggningen, inte från uppgifter som mobilen skickar.
   const review = await Review.create({
     user: req.user._id,
     movieId: req.body.movieId,
@@ -128,6 +135,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (!review) {
     return res.status(404).json({ error: 'Recensionen hittades inte.' });
   }
+  // Kontrollerar ägarskapet innan betyg eller text får ändras.
   if (String(review.user) !== String(req.user._id)) {
     return res.status(403).json({ error: 'Du får bara redigera dina egna recensioner.' });
   }
@@ -157,6 +165,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Du får bara ta bort dina egna recensioner.' });
   }
 
+  // Tar bara bort ägarens recension och svarar utan JSON-innehåll.
   await Review.deleteOne({ _id: review._id, user: req.user._id });
   res.status(204).end();
 });
@@ -164,6 +173,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 // Express 5 skickar avvisade async-anrop hit. Råa databasfel lämnar inte servern.
 router.use((error, _req, res, _next) => {
   if (error.code === 11000) {
+    // Databasens unika index stoppar dubbla recensioner av samma film.
     return res.status(409).json({ error: 'Du har redan recenserat den här filmen.' });
   }
   if (error.name === 'ValidationError') {

@@ -6,6 +6,7 @@ import User from '../models/User.js';
 
 const router = Router();
 
+// Kontrollerar e-postens delar och avvisar bland annat mellanslag och felaktig domän.
 function isValidEmail(email) {
   if (email.length > 254) {
     return false;
@@ -62,6 +63,7 @@ function isValidEmail(email) {
   return true;
 }
 
+// Skapar en JWT som gäller i en timme och innehåller användarens ID.
 function createAuthResponse(user, secret) {
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresIn = 3600;
@@ -89,6 +91,7 @@ function createAuthResponse(user, secret) {
   };
 }
 
+// Validerar uppgifterna innan ett nytt konto får skapas.
 router.post('/register', async (req, res) => {
   const { username, email, password } = req.body || {};
 
@@ -129,6 +132,7 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ error: 'E-postadressen används redan.' });
     }
 
+    // Hashar lösenordet med bcrypt innan användaren sparas.
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await User.create({
       username: username.trim(),
@@ -146,6 +150,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// Kontrollerar inloggningsuppgifterna och ger en ny JWT om de stämmer.
 router.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
 
@@ -176,6 +181,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Felaktig e-postadress eller lösenord.' });
     }
 
+    // Samma feltext används för okänd e-post och fel lösenord.
     const passwordMatches = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatches) {
@@ -187,6 +193,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// requireAuth kontrollerar sessionen innan användaruppgifterna skickas tillbaka.
 router.get('/me', requireAuth, (req, res) => {
   res.json({
     id: String(req.user._id),

@@ -59,6 +59,7 @@ async function request(path, body) {
   return { status: response.status, body: await response.json() };
 }
 
+// Kontrollerar token med riktiga JWT-funktioner men en slumpad testhemlighet.
 function checkToken(body) {
   const payload = jwt.verify(body.token, secret, { algorithms: ['HS256'] });
   assert.equal(payload.sub, body.user.id);
@@ -224,6 +225,7 @@ test('serverstart avvisar saknad databas, svag JWT-hemlighet och ogiltig port f�
   ];
   for (const settings of cases) {
     const { message, ...config } = settings;
+    // Barnprocessen får testinställningar och läser inte projektets riktiga .env.
     await assert.rejects(runFile(process.execPath, ['src/server.js'], {
       cwd: new URL('..', import.meta.url),
       env: { ...process.env, ...config, DOTENV_CONFIG_PATH: 'test/nonexistent-env-file' },

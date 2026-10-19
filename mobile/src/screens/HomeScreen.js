@@ -14,6 +14,7 @@ import fonts from '../styles/fonts';
 import globalStyles from '../styles/globalStyles';
 
 export default function HomeScreen() {
+  // Ett nytt försök ändrar värdet så att useEffect hämtar filmerna igen.
   const [attempt, setAttempt] = useState(0);
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +24,7 @@ export default function HomeScreen() {
     const controller = new AbortController();
     let active = true;
 
+    // Hämtar den första sidan med populära filmer från vårt API.
     async function loadMovies() {
       setLoading(true);
       setError('');

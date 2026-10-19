@@ -7,6 +7,7 @@ import {
 
 const router = Router();
 
+// Godtar bara vanliga siffror, inte decimaler, tecken eller andra talformat.
 function hasOnlyDigits(value) {
   if (typeof value !== 'string') {
     return false;
@@ -42,6 +43,7 @@ function getPage(value = '1') {
   return page;
 }
 
+// Kontrollerar sidnumret innan populära filmer hämtas från TMDB.
 router.get('/popular', async (req, res) => {
   const page = getPage(req.query.page);
 

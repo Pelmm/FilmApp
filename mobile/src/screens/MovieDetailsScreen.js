@@ -19,6 +19,7 @@ import globalStyles from '../styles/globalStyles';
 export default function MovieDetailsScreen({ route, navigation }) {
   const { user, isAuthenticated } = useContext(AuthContext);
   const isFocused = useIsFocused();
+  // Filmkortet skickar ID:t som behövs för att hämta detaljerna.
   const movieId = route.params?.movieId;
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,7 @@ export default function MovieDetailsScreen({ route, navigation }) {
 
     const controller = new AbortController();
 
+    // Tömmer föregående film medan den valda filmens detaljer hämtas.
     async function loadMovie() {
       setLoading(true);
       setError('');
@@ -70,7 +72,9 @@ export default function MovieDetailsScreen({ route, navigation }) {
     return () => controller.abort();
   }, [movieId, validMovieId, attempt]);
 
+  // Hämtar nya recensioner vid återkomst och efter ändringar i listan.
   useEffect(() => {
+    // Gamla recensioner ska inte visas som om de vore nyss hämtade.
     setReviews([]);
     setReviewsLoading(true);
     setReviewsError('');
@@ -81,6 +85,7 @@ export default function MovieDetailsScreen({ route, navigation }) {
 
     async function loadReviews() {
       try {
+        // Recensionerna är publika, så anropet behöver ingen inloggning.
         const data = await getMovieReviews(movieId, { signal: controller.signal });
         if (!controller.signal.aborted) {
           setReviews(data);
