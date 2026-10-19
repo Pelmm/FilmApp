@@ -13,6 +13,8 @@ export function AuthProvider({ children }) {
   const [canRetry, setCanRetry] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const busy = useRef(false);
+  const currentSession = useRef(null);
+  currentSession.current = session;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -98,22 +100,8 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    async function expireSession() {
-      setSession(null);
-      setMessage('Din session har gått ut. Logga in igen.');
-      if (busy.current) {
-        return;
-      }
-      busy.current = true;
-
-      try {
-        await SecureStore.deleteItemAsync(SESSION_KEY);
-      } catch {
-        setMessage('Din session har gått ut men kunde inte raderas. Försök igen.');
-        setCanRetry(true);
-      } finally {
-        busy.current = false;
-      }
+    function expireSession() {
+      return invalidateSession(session.token);
     }
 
     const remaining = Date.parse(session.expiresAt) - Date.now();
@@ -130,6 +118,28 @@ export function AuthProvider({ children }) {
       subscription.remove();
     };
   }, [session]);
+
+  async function invalidateSession(rejectedToken) {
+    // Ett sent 401-svar från en gammal session får inte logga ut en ny användare.
+    if (currentSession.current?.token !== rejectedToken) {
+      return;
+    }
+    setSession(null);
+    setMessage('Sessionen är ogiltig eller har gått ut. Logga in igen.');
+    if (busy.current) {
+      return;
+    }
+    busy.current = true;
+
+    try {
+      await SecureStore.deleteItemAsync(SESSION_KEY);
+    } catch {
+      setMessage('Sessionen är ogiltig men kunde inte raderas. Försök igen.');
+      setCanRetry(true);
+    } finally {
+      busy.current = false;
+    }
+  }
 
   async function signIn(credentials, options) {
     if (busy.current) {
@@ -212,6 +222,7 @@ export function AuthProvider({ children }) {
         retryRestore,
         signIn,
         signOut,
+        invalidateSession,
       }}
     >
       {children}

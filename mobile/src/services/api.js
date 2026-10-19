@@ -79,6 +79,9 @@ async function getJson(path, {
 
   try {
     response = await fetch(url, request);
+    if (response.status === 204) {
+      return null;
+    }
     data = await response.json();
 
     if (!response.ok) {
@@ -241,4 +244,95 @@ export async function loginUser({ email, password }, options) {
 export async function getCurrentUser(token, options) {
   const data = await getJson('auth/me', { ...options, token });
   return getUser(data);
+}
+
+function requireToken(token) {
+  if (typeof token !== 'string' || !token) {
+    const error = new Error('Logga in för att hantera recensioner.');
+    error.status = 401;
+    throw error;
+  }
+}
+
+function reviewList(data) {
+  if (!Array.isArray(data?.reviews)) {
+    throw new Error('Servern skickade en ogiltig recensionslista. Försök igen.');
+  }
+  return data.reviews;
+}
+
+function savedReview(data) {
+  if (typeof data?.review?.id !== 'string') {
+    throw new Error('Servern skickade en ogiltig recension. Försök igen.');
+  }
+  return data.review;
+}
+
+export function getReviewError(rating, text) {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 10) {
+    return 'Välj ett heltalsbetyg mellan 1 och 10.';
+  }
+  if (typeof text !== 'string' || !text.trim()) {
+    return 'Skriv en recensionstext.';
+  }
+  if (text.trim().length > 2000) {
+    return 'Recensionstexten får vara högst 2000 tecken.';
+  }
+  return '';
+}
+
+export async function getMovieReviews(movieId, options) {
+  if (!Number.isSafeInteger(movieId) || movieId < 1) {
+    throw new Error('Film-ID måste vara ett positivt, säkert heltal.');
+  }
+  return reviewList(await getJson(`reviews/movie/${movieId}`, options));
+}
+
+export async function getMyReviews(token, options) {
+  requireToken(token);
+  return reviewList(await getJson('reviews/mine', { ...options, token }));
+}
+
+export async function createReview(token, { movieId, rating, text }, options) {
+  requireToken(token);
+  if (!Number.isSafeInteger(movieId) || movieId < 1) {
+    throw new Error('Film-ID måste vara ett positivt, säkert heltal.');
+  }
+  const error = getReviewError(rating, text);
+  if (error) {
+    throw new Error(error);
+  }
+  const data = await getJson('reviews', {
+    ...options,
+    token,
+    method: 'POST',
+    body: { movieId, rating, text: text.trim() },
+  });
+  return savedReview(data);
+}
+
+export async function updateReview(token, id, { rating, text }, options) {
+  requireToken(token);
+  if (typeof id !== 'string' || !id) {
+    throw new Error('Recensions-ID saknas.');
+  }
+  const error = getReviewError(rating, text);
+  if (error) {
+    throw new Error(error);
+  }
+  const data = await getJson(`reviews/${encodeURIComponent(id)}`, {
+    ...options,
+    token,
+    method: 'PATCH',
+    body: { rating, text: text.trim() },
+  });
+  return savedReview(data);
+}
+
+export async function deleteReview(token, id, options) {
+  requireToken(token);
+  if (typeof id !== 'string' || !id) {
+    throw new Error('Recensions-ID saknas.');
+  }
+  await getJson(`reviews/${encodeURIComponent(id)}`, { ...options, token, method: 'DELETE' });
 }
