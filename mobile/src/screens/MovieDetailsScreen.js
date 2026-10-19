@@ -2,9 +2,11 @@ import { useContext, useEffect, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View
@@ -104,6 +106,30 @@ export default function MovieDetailsScreen({ route, navigation }) {
     loadReviews();
     return () => controller.abort();
   }, [isFocused, movieId, validMovieId, reviewsAttempt, user?.id]);
+
+  // Öppnar mobilens delningsmeny med filmens titel och länk.
+  async function handleShare() {
+    if (!Number.isSafeInteger(movie?.id) || movie.id < 1) {
+      Alert.alert('Kan inte dela filmen', 'Filmens ID saknas eller är ogiltigt.');
+      return;
+    }
+    if (typeof movie.title !== 'string' || !movie.title.trim()) {
+      Alert.alert('Kan inte dela filmen', 'Filmens titel saknas.');
+      return;
+    }
+
+    try {
+      const result = await Share.share({
+        message: `Kolla in ${movie.title.trim()}!\n\nhttps://www.themoviedb.org/movie/${movie.id}`,
+      });
+      // Ett avbrott ska inte visas som ett fel eller ett lyckat resultat.
+      if (result.action === Share.dismissedAction) {
+        return;
+      }
+    } catch {
+      Alert.alert('Kunde inte dela filmen', 'Försök igen om en stund.');
+    }
+  }
 
   if (!validMovieId) {
     return (
@@ -212,6 +238,13 @@ export default function MovieDetailsScreen({ route, navigation }) {
       {runtimeInfo}
       <Text style={styles.heading}>Handling</Text>
       <Text style={globalStyles.text}>{overview}</Text>
+      <Pressable
+        style={[styles.retryButton, styles.shareButton]}
+        accessibilityRole="button"
+        onPress={handleShare}
+      >
+        <Text style={styles.retryText}>Dela film</Text>
+      </Pressable>
       <Text style={styles.heading}>Recensioner</Text>
       {reviewsLoading && <ActivityIndicator color={colors.accent} accessibilityLabel="Hämtar recensioner" />}
       {reviewsError !== '' && (
@@ -316,6 +349,13 @@ const styles = StyleSheet.create({
     fontWeight: fonts.weights.bold,
     marginTop: 12,
     marginBottom: 12,
+  },
+
+  shareButton: {
+    minHeight: 48,
+    marginVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   retryButton: {

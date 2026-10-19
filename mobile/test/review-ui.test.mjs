@@ -34,6 +34,15 @@ function screen(name, props = {}, authenticated = true) {
   const listeners = new Map();
   const destinations = [];
   const alerts = [];
+  const shares = [];
+  const shareApi = {
+    sharedAction: 'sharedAction',
+    dismissedAction: 'dismissedAction',
+    async share(content) {
+      shares.push(content);
+      return { action: 'sharedAction' };
+    },
+  };
   let focused = true;
   let position = 0;
   let dirty = true;
@@ -99,6 +108,7 @@ function screen(name, props = {}, authenticated = true) {
     StyleSheet: { create: value => value },
     Platform: { OS: 'android' }, Keyboard: { dismiss() {} },
     Alert: { alert: (...args) => alerts.push(args) },
+    Share: shareApi,
     colors: {}, fonts: { sizes: {}, weights: {} }, globalStyles: {},
   };
   for (const name of ['ActivityIndicator', 'Image', 'KeyboardAvoidingView', 'ScrollView',
@@ -116,7 +126,7 @@ function screen(name, props = {}, authenticated = true) {
     pending.forEach(effect => effect());
   }
   return {
-    auth, api, navigation, destinations, alerts,
+    auth, api, navigation, destinations, alerts, shares, shareApi,
     get tree() { return tree; },
     // Låter väntande löften och ändringar i testets skärm hinna köras klart.
     async flush() {
@@ -166,6 +176,74 @@ async function fill(app) {
 }
 
 const editorProps = { route: { params: { movieId: 550, movieTitle: 'Testfilm' } } };
+
+test('Dela film använder aktuell titel och TMDB-länk även utan inloggning', async () => {
+  for (const data of [movie, { ...movie, id: 155, title: 'The Dark Knight' }]) {
+    const app = screen('screens/MovieDetailsScreen', { route: { params: { movieId: data.id } } }, false);
+    app.api.getMovieDetails = async () => data;
+    await app.flush();
+    await button(app, 'Dela film')();
+    assert.equal(app.shares.length, 1);
+    assert.equal(app.shares[0].message, `Kolla in ${data.title}!\n\nhttps://www.themoviedb.org/movie/${data.id}`);
+    assert.equal(app.alerts.length, 0);
+    assert.equal(app.auth.isAuthenticated, false);
+    assert.equal(app.destinations.length, 0);
+  }
+});
+
+test('Dela film fungerar även för en inloggad användare och trimmar titeln', async () => {
+  const app = screen('screens/MovieDetailsScreen', { route: { params: { movieId: 550 } } });
+  app.api.getMovieDetails = async () => ({ ...movie, title: '  Testfilm  ' });
+  await app.flush();
+  await button(app, 'Dela film')();
+  assert.equal(app.shares[0].message, 'Kolla in Testfilm!\n\nhttps://www.themoviedb.org/movie/550');
+  assert.equal(app.alerts.length, 0);
+});
+
+test('saknat eller ogiltigt film-ID stoppar delningen med ett begripligt fel', async () => {
+  for (const id of [undefined, null, 0, -1, 1.5, '550']) {
+    const app = screen('screens/MovieDetailsScreen', { route: { params: { movieId: 550 } } });
+    app.api.getMovieDetails = async () => ({ ...movie, id });
+    await app.flush();
+    await button(app, 'Dela film')();
+    assert.equal(app.shares.length, 0);
+    assert.equal(app.alerts.length, 1);
+    assert.equal(app.alerts[0][0], 'Kan inte dela filmen');
+    assert.equal(app.alerts[0][1], 'Filmens ID saknas eller är ogiltigt.');
+  }
+});
+
+test('saknad eller tom filmtitel delas inte som reservtext', async () => {
+  for (const title of [undefined, null, '', '   ', 123]) {
+    const app = screen('screens/MovieDetailsScreen', { route: { params: { movieId: 550 } } });
+    app.api.getMovieDetails = async () => ({ ...movie, title });
+    await app.flush();
+    await button(app, 'Dela film')();
+    assert.equal(app.shares.length, 0);
+    assert.equal(app.alerts.length, 1);
+    assert.equal(app.alerts[0][1], 'Filmens titel saknas.');
+  }
+});
+
+test('avbruten delning visar inget fel eller framgångsmeddelande', async () => {
+  const app = screen('screens/MovieDetailsScreen', { route: { params: { movieId: 550 } } });
+  app.shareApi.share = async () => ({ action: app.shareApi.dismissedAction });
+  await app.flush();
+  await button(app, 'Dela film')();
+  assert.equal(app.alerts.length, 0);
+  assert.equal(app.destinations.length, 0);
+});
+
+test('ett faktiskt Share-fel visas utan att exponera det interna felmeddelandet', async () => {
+  const app = screen('screens/MovieDetailsScreen', { route: { params: { movieId: 550 } } });
+  app.shareApi.share = async () => { throw new Error('Internt fel från operativsystemet'); };
+  await app.flush();
+  await button(app, 'Dela film')();
+  assert.equal(app.alerts.length, 1);
+  assert.equal(app.alerts[0][0], 'Kunde inte dela filmen');
+  assert.equal(app.alerts[0][1], 'Försök igen om en stund.');
+  assert.equal(app.auth.invalidated, 0);
+});
 
 test('formuläret validerar, blockerar dubbeltryck och visar lyckat resultat', async () => {
   const app = screen('screens/ReviewEditorScreen', editorProps);
