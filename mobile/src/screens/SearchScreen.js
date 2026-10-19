@@ -631,7 +631,8 @@ const styles = StyleSheet.create({
   },
 
   genreButton: {
-    height: 48,
+    // Låter knappen växa om användaren har större text.
+    minHeight: 48,
     flexShrink: 0,
     marginBottom: 0,
     borderRadius: 24,

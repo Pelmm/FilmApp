@@ -592,6 +592,43 @@ test('genrerna ligger horisontellt och filterpanelen kan stängas med knapp och 
   assert.equal(nodes(app.tree, 'Modal').length, 0);
 });
 
+test('genreknappar har stor tryckyta och kan växa med texten utan att genrevalet ändras', async () => {
+  const app = screen('screens/SearchScreen');
+  const genreName = 'En genre med ett långt namn';
+  const calls = [];
+  app.api.getMovieGenres = async () => [{ id: 27, name: genreName }];
+  app.api.discoverMovies = async filters => {
+    calls.push(filters);
+    return { page: 1, total_pages: 0, total_results: 0, results: [] };
+  };
+  await app.flush();
+  button(app, 'Utforska filmer')();
+  await app.flush();
+  assert.equal(nodes(app.tree, 'ScrollView')[0].props.horizontal, true);
+  for (const selected of [false, true]) {
+    const genres = nodes(app.tree, 'Pressable').filter(node => {
+      return node.props.accessibilityLabel?.startsWith('Genre:');
+    });
+    for (const genre of genres) {
+      const style = Object.assign({}, ...genre.props.style.filter(Boolean));
+      assert.ok(style.minHeight >= 48);
+      assert.equal(style.height, undefined);
+      assert.equal(style.maxHeight, undefined);
+      const label = nodes(genre, 'Text')[0];
+      assert.equal(label.props.numberOfLines, undefined);
+      assert.notEqual(label.props.allowFontScaling, false);
+    }
+    const option = genres.find(node => node.props.accessibilityLabel === `Genre: ${genreName}`);
+    assert.equal(option.props.accessibilityState.selected, selected);
+    if (!selected) {
+      option.props.onPress();
+      await app.advance(300);
+    }
+  }
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].genre, 27);
+});
+
 test('snabba genrebyten skickar bara det sista genre-ID:t och markerar ett val', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
