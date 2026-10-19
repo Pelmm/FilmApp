@@ -170,6 +170,31 @@ export async function searchMovies(query, page = 1, options) {
   return checkMovieList(data);
 }
 
+// Backend skickar genrelistan direkt som en array med ID och namn.
+export async function getMovieGenres(options) {
+  const data = await getJson('movies/genres', options);
+  if (!Array.isArray(data)) {
+    throw new Error('Servern skickade en ogiltig genrelista.');
+  }
+  return data;
+}
+
+// Skickar bara valda filter. Utforska hämtar än så länge endast sida 1.
+export async function discoverMovies({ genre, year, minRating, sortBy = 'popular' } = {}, options) {
+  const params = ['page=1', `sortBy=${encodeURIComponent(sortBy)}`];
+  if (genre !== undefined) {
+    params.push(`genre=${encodeURIComponent(genre)}`);
+  }
+  if (year !== undefined) {
+    params.push(`year=${encodeURIComponent(year)}`);
+  }
+  if (minRating !== undefined) {
+    params.push(`minRating=${encodeURIComponent(minRating)}`);
+  }
+  const data = await getJson(`movies/discover?${params.join('&')}`, options);
+  return checkMovieList(data);
+}
+
 export async function getMovieDetails(id, options) {
   const movieId = Number(id);
 

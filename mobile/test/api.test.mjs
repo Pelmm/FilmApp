@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import test, { afterEach, beforeEach } from 'node:test';
 import app from '../../server/src/app.js';
-import { getApiUrl, getHealth, getPopularMovies, searchMovies, getMovieDetails } from '../src/services/api.js';
+import {
+  getApiUrl, getHealth, getPopularMovies, searchMovies, getMovieDetails,
+  getMovieGenres, discoverMovies,
+} from '../src/services/api.js';
 
 const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
 beforeEach(() => { process.env.EXPO_PUBLIC_API_URL = 'http://10.0.2.2:3000/api'; });
@@ -270,4 +273,87 @@ test('filmdetaljer kan avbrytas när vald film ändras', async (t) => {
   const pending = getMovieDetails(157336, { signal: controller.signal });
   controller.abort();
   await assert.rejects(pending, { name: 'AbortError' });
+});
+
+test('genreanropet hämtar backendens direkta lista utan JWT', async (t) => {
+  const genres = [{ id: 27, name: 'Skräck' }];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'http://10.0.2.2:3000/api/movies/genres');
+    assert.equal(options.method, 'GET');
+    assert.equal(options.headers.Authorization, undefined);
+    return Response.json(genres);
+  });
+  assert.deepEqual(await getMovieGenres(), genres);
+});
+
+test('Discover utan filter skickar bara standardvärden och bevarar backendens fältnamn', async (t) => {
+  const data = { page: 1, total_pages: 12, total_results: 230, results: [{ id: 11 }] };
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const params = new URL(url).searchParams;
+    assert.equal(new URL(url).pathname, '/api/movies/discover');
+    assert.equal(params.size, 2);
+    assert.equal(params.get('page'), '1');
+    assert.equal(params.get('sortBy'), 'popular');
+    assert.equal(options.headers.Authorization, undefined);
+    return Response.json(data);
+  });
+  assert.deepEqual(await discoverMovies(), data);
+});
+
+test('Discover skickar genre, år, betyg och sortering men ingen söktext eller senare sida', async (t) => {
+  t.mock.method(globalThis, 'fetch', async url => {
+    const params = new URL(url).searchParams;
+    assert.equal(params.size, 5);
+    assert.equal(params.get('genre'), '27');
+    assert.equal(params.get('year'), '2020');
+    assert.equal(params.get('minRating'), '7');
+    assert.equal(params.get('sortBy'), 'rating');
+    assert.equal(params.get('page'), '1');
+    assert.equal(params.has('query'), false);
+    return Response.json({ results: [], page: 1, total_pages: 0, total_results: 0 });
+  });
+  await discoverMovies({ genre: 27, year: 2020, minRating: 7, sortBy: 'rating', query: 'Batman', page: 4 });
+});
+
+test('Discover kan skicka ett enskilt filter och kodar specialtecken', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', async url => {
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('genre'), '27');
+    assert.equal(params.has('year'), false);
+    assert.equal(params.has('minRating'), false);
+    return Response.json({ results: [] });
+  });
+  await discoverMovies({ genre: 27 });
+  mock.mock.mockImplementation(async url => {
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('sortBy'), 'bad&query=Batman');
+    assert.equal(params.has('query'), false);
+    assert.equal(params.get('minRating'), '0');
+    return Response.json({ results: [] });
+  });
+  await discoverMovies({ sortBy: 'bad&query=Batman', minRating: 0 });
+});
+
+test('genrer och Discover avvisar felaktiga svar och behåller backendens feltext', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch', async () => Response.json({ genres: [] }));
+  await assert.rejects(getMovieGenres(), { message: 'Servern skickade en ogiltig genrelista.' });
+  mock.mock.mockImplementation(async () => Response.json({ results: {} }));
+  await assert.rejects(discoverMovies(), { message: 'Servern skickade en ogiltig filmlista.' });
+  mock.mock.mockImplementation(async () => Response.json({ error: 'Ogiltigt filter.' }, { status: 400 }));
+  await assert.rejects(discoverMovies(), { message: 'Ogiltigt filter.', status: 400 });
+});
+
+test('genre- och Discover-anrop hanterar nätverksfel, timeout och avbrytning', async (t) => {
+  const mock = t.mock.method(globalThis, 'fetch');
+  const actions = [options => getMovieGenres(options), options => discoverMovies({}, options)];
+  for (const action of actions) {
+    mock.mock.mockImplementation(async () => { throw new TypeError('Network request failed'); });
+    await assert.rejects(action(), error => error.message.includes('Kunde inte nå servern'));
+    mock.mock.mockImplementation(pendingFetch);
+    await assert.rejects(action({ timeoutMs: 5 }), error => error.message.includes('inte i tid'));
+    const controller = new AbortController();
+    const pending = action({ signal: controller.signal });
+    controller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+  }
 });
