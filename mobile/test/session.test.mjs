@@ -314,7 +314,7 @@ function renderNavigator(isAuthenticated) {
     globalStyles: {}, colors: {}, fonts: { sizes: {}, weights: {} },
   };
   for (const name of ['Pressable', 'ActivityIndicator', 'Text', 'View', 'SafeAreaView', 'NavigationContainer',
-    'HomeScreen', 'SearchScreen', 'MovieDetailsScreen', 'LoginScreen', 'RegisterScreen', 'MyReviewsScreen']) scope[name] = name;
+    'HomeScreen', 'SearchScreen', 'MovieDetailsScreen', 'LoginScreen', 'RegisterScreen', 'MyReviewsScreen', 'ReviewEditorScreen']) scope[name] = name;
   const Navigator = loadComponent('../src/navigation/AppNavigator.js', 'AppNavigator', scope);
   const tree = Navigator();
   const screens = [], buttons = [];
@@ -335,6 +335,8 @@ test('navigationen skyddar Mina recensioner och håller filmvyerna offentliga', 
   const member = renderNavigator(true);
   assert.equal(guest.screens.includes('MyReviews'), false);
   assert.equal(member.screens.includes('MyReviews'), true);
+  assert.equal(guest.screens.includes('ReviewEditor'), false);
+  assert.equal(member.screens.includes('ReviewEditor'), true);
   assert.equal(member.screens.includes('Login'), false);
   assert.equal(guest.destinations[0], 'Login');
   assert.equal(member.destinations[0], 'MyReviews');
@@ -343,4 +345,27 @@ test('navigationen skyddar Mina recensioner och håller filmvyerna offentliga', 
     assert.equal(member.screens.includes(name), true);
   }
   assert.equal(renderNavigator(false).screens.includes('MyReviews'), false);
+});
+
+test('recensions-401 rensar den aktiva sessionen men sena svar påverkar inte en ny session', async () => {
+  const app = sessionApp();
+  await app.flush();
+  await app.value.signIn({});
+  await app.flush();
+  const oldToken = app.data.token;
+  const oldInvalidate = app.value.invalidateSession;
+  await app.value.signOut();
+  await app.flush();
+  app.data.token = randomBytes(32).toString('hex');
+  await app.value.signIn({});
+  await app.flush();
+  await oldInvalidate(oldToken);
+  await app.flush();
+  assert.equal(app.value.isAuthenticated, true);
+  assert.equal(app.value.token, app.data.token);
+  await app.value.invalidateSession(app.data.token);
+  await app.flush();
+  assert.equal(app.value.isAuthenticated, false);
+  assert.equal(app.values.has(key), false);
+  assert.ok(app.value.message.includes('Logga in igen'));
 });
