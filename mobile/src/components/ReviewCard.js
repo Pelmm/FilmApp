@@ -99,7 +99,11 @@ export default function ReviewCard({ review, movieTitle, showMovieLink = false, 
       <Text style={styles.rating}>Betyg: {review.rating} / 10</Text>
       <Text style={globalStyles.text}>{review.text}</Text>
       <Text style={styles.metadata}>
-        {review.user?.username || 'Borttagen användare'} · {new Date(review.updatedAt).toLocaleDateString('sv-SE')}
+        {review.user?.username || 'Borttagen användare'} · {new Date(review.updatedAt).toLocaleString('sv-SE', {
+          timeZone: 'Europe/Stockholm',
+          dateStyle: 'short',
+          timeStyle: 'short',
+        })}
       </Text>
       {isOwner && (
         <View style={styles.actions}>
