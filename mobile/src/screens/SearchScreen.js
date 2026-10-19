@@ -15,7 +15,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { searchMovies, discoverMovies, getMovieGenres } from '../services/api';
+import { searchMovies, discoverMovies, getMovieGenres, mergeMovies } from '../services/api';
 import MovieCard from '../components/MovieCard';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
@@ -72,6 +72,15 @@ export default function SearchScreen({ navigation }) {
   const [filterError, setFilterError] = useState('');
   // Panelens val sparas separat från filtren som används för filmerna.
   const [appliedFilters, setAppliedFilters] = useState({ year: '', minRating: null, sortBy: 'popular' });
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState('');
+  // Nästa sida använder sökningen som gav listan, inte osparade ändringar.
+  const resultQuery = useRef('');
+  const resultFilters = useRef(null);
+  // Skiljer pågående Ladda fler från en första hämtning vid nya sökval.
+  const requestPage = useRef(0);
   const request = useRef(null);
   const genreTimer = useRef(null);
 
@@ -85,7 +94,10 @@ export default function SearchScreen({ navigation }) {
         request.current?.abort();
         request.current = null;
         setLoading(false);
-        setHasSearched(false);
+        setLoadingMore(false);
+        if (requestPage.current === 1) {
+          setHasSearched(false);
+        }
       }
     });
 
@@ -133,6 +145,10 @@ export default function SearchScreen({ navigation }) {
     request.current?.abort();
     request.current = null;
     setMovies([]);
+    setPage(0);
+    setTotalPages(0);
+    setLoadingMore(false);
+    setMoreError('');
     setLoading(false);
     setError('');
     setHasSearched(false);
@@ -174,7 +190,7 @@ export default function SearchScreen({ navigation }) {
   }
 
   function applyFilters() {
-    if (request.current || genreTimer.current) {
+    if ((request.current && requestPage.current === 1) || genreTimer.current) {
       return;
     }
     if (!isValidYear(year)) {
@@ -197,6 +213,7 @@ export default function SearchScreen({ navigation }) {
     Keyboard.dismiss();
     setLoading(true);
     setHasSearched(true);
+    requestPage.current = 1;
     // Väntar kort så att snabba genrebyten bara hämtar det sista valet.
     genreTimer.current = setTimeout(() => {
       genreTimer.current = null;
@@ -204,25 +221,41 @@ export default function SearchScreen({ navigation }) {
     }, 300);
   }
 
-  async function handleSearch(selectedFilters = appliedFilters, selectedGenre = genre) {
-    // Ref-värdet ändras direkt och stoppar även två snabba tryck före nästa render.
+  async function handleSearch(selectedFilters = appliedFilters, selectedGenre = genre, nextPage = 1) {
+    const more = nextPage > 1;
+    // Ett nytt sökval avbryter Ladda fler, men dubbeltryck ska inte starta fler anrop.
     if (request.current) {
-      return;
+      if (more || requestPage.current === 1) {
+        return;
+      }
+      request.current.abort();
+      request.current = null;
     }
-    const searchQuery = query.trim();
+    let searchQuery = query.trim();
+    if (more) {
+      searchQuery = resultQuery.current;
+    }
     if (mode === 'title' && !searchQuery) {
+      clearResults();
       setError('Ange en filmtitel innan du söker.');
-      setMovies([]);
-      setHasSearched(false);
       return;
     }
     const controller = new AbortController();
-    // Tömmer tidigare resultat så att de inte visas som svar på den nya sökningen.
     request.current = controller;
-    setLoading(true);
-    setError('');
-    setMovies([]);
-    setHasSearched(true);
+    requestPage.current = nextPage;
+    setMoreError('');
+    if (more) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setLoadingMore(false);
+      setError('');
+      setMovies([]);
+      setPage(0);
+      setTotalPages(0);
+      setHasSearched(true);
+      resultQuery.current = searchQuery;
+    }
     if (mode === 'title') {
       Keyboard.dismiss();
     }
@@ -230,27 +263,40 @@ export default function SearchScreen({ navigation }) {
     try {
       let data;
       if (mode === 'title') {
-        data = await searchMovies(searchQuery, 1, { signal: controller.signal });
+        data = await searchMovies(searchQuery, nextPage, { signal: controller.signal });
       } else {
-        const filters = { sortBy: selectedFilters.sortBy };
-        if (selectedGenre !== null) {
-          filters.genre = selectedGenre;
+        let filters = resultFilters.current;
+        if (!more) {
+          filters = { sortBy: selectedFilters.sortBy };
+          if (selectedGenre !== null) {
+            filters.genre = selectedGenre;
+          }
+          if (selectedFilters.year !== '') {
+            filters.year = Number(selectedFilters.year);
+          }
+          if (selectedFilters.minRating !== null) {
+            filters.minRating = selectedFilters.minRating;
+          }
+          resultFilters.current = filters;
         }
-        if (selectedFilters.year !== '') {
-          filters.year = Number(selectedFilters.year);
-        }
-        if (selectedFilters.minRating !== null) {
-          filters.minRating = selectedFilters.minRating;
+        if (more) {
+          filters = { ...filters, page: nextPage };
         }
         data = await discoverMovies(filters, { signal: controller.signal });
       }
       // Ett sent svar ska inte uppdatera en sökning som har avbrutits.
       if (!controller.signal.aborted) {
-        setMovies(data.results);
+        setMovies(current => mergeMovies(more ? current : [], data.results));
+        setPage(data.page);
+        setTotalPages(Math.min(data.total_pages, 500));
       }
     } catch (error) {
       if (!controller.signal.aborted) {
-        setError(error.message);
+        if (more) {
+          setMoreError('Kunde inte ladda fler filmer. ' + error.message);
+        } else {
+          setError(error.message);
+        }
       }
     } finally {
       // Ett gammalt anrop får inte ändra statusen för ett nyare anrop.
@@ -258,9 +304,17 @@ export default function SearchScreen({ navigation }) {
         request.current = null;
         if (!controller.signal.aborted) {
           setLoading(false);
+          setLoadingMore(false);
         }
       }
     }
+  }
+
+  function loadMore() {
+    if (page < 1 || page >= totalPages || genreTimer.current) {
+      return;
+    }
+    handleSearch(appliedFilters, genre, page + 1);
   }
 
   let status = null;
@@ -425,6 +479,26 @@ export default function SearchScreen({ navigation }) {
         contentContainerStyle={styles.list}
         ListHeaderComponent={form}
         ListEmptyComponent={status}
+        ListFooterComponent={
+          <View>
+            {moreError !== '' && (
+              <Text style={styles.message} accessibilityLiveRegion="polite">{moreError}</Text>
+            )}
+            {page > 0 && page < totalPages && (
+              <Pressable
+                style={[styles.button, styles.moreButton, loadingMore && styles.disabledButton]}
+                onPress={loadMore}
+                disabled={loadingMore}
+                accessibilityRole="button"
+                accessibilityLabel="Ladda fler filmer"
+                accessibilityState={{ disabled: loadingMore, busy: loadingMore }}
+              >
+                {loadingMore && <ActivityIndicator color={colors.background} accessibilityLabel="Hämtar fler filmer" />}
+                <Text style={styles.buttonText}>Ladda fler</Text>
+              </Pressable>
+            )}
+          </View>
+        }
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       />
@@ -536,6 +610,11 @@ export default function SearchScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  moreButton: {
+    marginLeft: 0,
+    paddingVertical: 12,
+  },
+
   modeRow: {
     flexDirection: 'row',
     columnGap: 8,

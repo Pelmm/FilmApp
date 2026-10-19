@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import { getReviewError } from '../src/services/api.js';
+import { getReviewError, mergeMovies, getPopularMovies } from '../src/services/api.js';
 import { StackRouter, StackActions } from '../node_modules/@react-navigation/routers/lib/module/index.js';
 
 const require = createRequire(import.meta.url);
@@ -58,8 +58,9 @@ function screen(name, props = {}, authenticated = true) {
     async signOut() { auth.signedOut++; },
   };
   const api = {
-    getReviewError,
-    searchMovies: async () => ({ results: [] }),
+    getReviewError, mergeMovies,
+    getPopularMovies: async () => ({ page: 1, total_pages: 0, results: [] }),
+    searchMovies: async () => ({ page: 1, total_pages: 1, results: [] }),
     discoverMovies: async () => ({ page: 1, total_pages: 0, total_results: 0, results: [] }),
     getMovieGenres: async () => [{ id: 27, name: 'Skräck' }, { id: 28, name: 'Action' }],
     getMovieDetails: async () => movie,
@@ -125,7 +126,7 @@ function screen(name, props = {}, authenticated = true) {
     colors: {}, fonts: { sizes: {}, weights: {} }, globalStyles: {},
   };
   for (const name of ['ActivityIndicator', 'Image', 'KeyboardAvoidingView', 'ScrollView',
-    'FlatList', 'Modal', 'TextInput', 'Pressable', 'Text', 'View', 'ReviewCard', 'MovieCard']) scope[name] = name;
+    'FlatList', 'Button', 'Modal', 'TextInput', 'Pressable', 'Text', 'View', 'ReviewCard', 'MovieCard']) scope[name] = name;
   for (const key of Object.keys(api)) scope[key] = (...args) => api[key](...args);
   const context = vm.createContext(scope);
   vm.runInContext(code, context);
@@ -177,6 +178,7 @@ function nodes(root, type) {
     visit(node.children);
     visit(node.props?.ListHeaderComponent);
     visit(node.props?.ListEmptyComponent);
+    visit(node.props?.ListFooterComponent);
   }
   visit(root);
   return found;
@@ -537,7 +539,7 @@ test('Sök titel är standard och hämtar ingen genrelista före Utforska', asyn
 test('titelsökningen validerar tomt fält och skickar titel och sida ett som tidigare', async () => {
   const app = screen('screens/SearchScreen');
   let args;
-  app.api.searchMovies = async (...values) => { args = values; return { results: [movie] }; };
+  app.api.searchMovies = async (...values) => { args = values; return { page: 1, total_pages: 1, results: [movie] }; };
   app.api.discoverMovies = () => assert.fail('Titelsökning får inte använda Discover');
   await app.flush();
   await button(app, 'Sök')();
@@ -593,7 +595,7 @@ test('genrerna ligger horisontellt och filterpanelen kan stängas med knapp och 
 test('snabba genrebyten skickar bara det sista genre-ID:t och markerar ett val', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
-  app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
+  app.api.discoverMovies = async filters => { calls.push(filters); return { page: 1, total_pages: 1, results: [movie] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
@@ -619,7 +621,7 @@ test('snabba genrebyten skickar bara det sista genre-ID:t och markerar ett val',
 test('panelen kombinerar val med genre och nya genreval använder tillämpade filter', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
-  app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
+  app.api.discoverMovies = async filters => { calls.push(filters); return { page: 1, total_pages: 1, results: [movie] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
@@ -647,7 +649,7 @@ test('panelen kombinerar val med genre och nya genreval använder tillämpade fi
 test('stängd panel behåller tidigare filter och resultat trots ändringar som inte tillämpats', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
-  app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
+  app.api.discoverMovies = async filters => { calls.push(filters); return { page: 1, total_pages: 1, results: [movie] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
@@ -680,7 +682,7 @@ test('stängd panel behåller tidigare filter och resultat trots ändringar som 
 test('Rensa filter återställer genre, panel och tillämpade filter utan onödigt anrop', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
-  app.api.discoverMovies = async filters => { calls.push(filters); return { results: [movie] }; };
+  app.api.discoverMovies = async filters => { calls.push(filters); return { page: 1, total_pages: 1, results: [movie] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
@@ -713,7 +715,7 @@ test('Rensa filter återställer genre, panel och tillämpade filter utan onödi
 test('ogiltigt år behåller panelen och rätt årsgränser kan tillämpas', async () => {
   const app = screen('screens/SearchScreen');
   const calls = [];
-  app.api.discoverMovies = async filters => { calls.push(filters); return { results: [] }; };
+  app.api.discoverMovies = async filters => { calls.push(filters); return { page: 1, total_pages: 1, results: [] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
@@ -759,7 +761,7 @@ test('Visa filmer spärrar dubbeltryck och behåller laddning, tom lista, API-fe
   assert.equal(calls, 1);
   assert.equal(nodes(app.tree, 'Modal').length, 0);
   assert.equal(nodes(app.tree, 'ActivityIndicator').length, 1);
-  respond({ results: [] });
+  respond({ page: 1, total_pages: 1, results: [] });
   await app.flush();
   assert.ok(text(nodes(app.tree, 'FlatList')[0].props.ListEmptyComponent).includes('Inga filmer matchar filtren'));
   app.api.discoverMovies = async () => { throw new Error('Tillfälligt nätverksfel'); };
@@ -768,7 +770,7 @@ test('Visa filmer spärrar dubbeltryck och behåller laddning, tom lista, API-fe
   button(app, 'Visa filmer')();
   await app.flush();
   assert.ok(text(nodes(app.tree, 'FlatList')[0].props.ListEmptyComponent).includes('Tillfälligt nätverksfel'));
-  app.api.discoverMovies = async () => ({ results: [movie] });
+  app.api.discoverMovies = async () => ({ page: 1, total_pages: 1, results: [movie] });
   await button(app, 'Försök igen')();
   await app.flush();
   assert.equal(nodes(app.tree, 'FlatList')[0].props.data[0].id, movie.id);
@@ -800,7 +802,7 @@ test('sena titelsvar och fel får inte skriva över resultat från ett nytt sök
       signal = options.signal;
       return new Promise((success, failure) => { resolve = success; reject = failure; });
     };
-    app.api.discoverMovies = async () => ({ results: [{ ...movie, id: 155 }] });
+    app.api.discoverMovies = async () => ({ page: 1, total_pages: 1, results: [{ ...movie, id: 155 }] });
     await app.flush();
     nodes(app.tree, 'TextInput')[0].props.onChangeText('Batman');
     await app.flush();
@@ -811,7 +813,7 @@ test('sena titelsvar och fel får inte skriva över resultat från ett nytt sök
     await app.advance(300);
     assert.equal(signal.aborted, true);
     if (fail) reject(new Error('Gammalt fel'));
-    else resolve({ results: [movie] });
+    else resolve({ page: 1, total_pages: 1, results: [movie] });
     await pending;
     await app.flush();
     assert.equal(nodes(app.tree, 'FlatList')[0].props.data[0].id, 155);
@@ -834,9 +836,9 @@ test('genrebyte avbryter förra hämtningen och sena svar påverkar inte nya fil
   button(app, 'Action')();
   assert.equal(signals[0].aborted, true);
   await app.advance(300);
-  responses[1]({ results: [{ ...movie, id: 155 }] });
+  responses[1]({ page: 1, total_pages: 1, results: [{ ...movie, id: 155 }] });
   await app.flush();
-  responses[0]({ results: [movie] });
+  responses[0]({ page: 1, total_pages: 1, results: [movie] });
   await app.flush();
   assert.equal(nodes(app.tree, 'FlatList')[0].props.data[0].id, 155);
 });
@@ -844,7 +846,7 @@ test('genrebyte avbryter förra hämtningen och sena svar påverkar inte nya fil
 test('Rensa filter, lägesbyte och avmontering stoppar väntande genreanrop', async () => {
   const app = screen('screens/SearchScreen');
   let calls = 0;
-  app.api.discoverMovies = async () => { calls++; return { results: [] }; };
+  app.api.discoverMovies = async () => { calls++; return { page: 1, total_pages: 1, results: [] }; };
   await app.flush();
   button(app, 'Utforska filmer')();
   await app.flush();
@@ -895,7 +897,337 @@ test('blur stänger panelen och avbryter både genrer och pågående filmhämtni
   assert.equal(movieSignal.aborted, true);
   assert.equal(nodes(app.tree, 'Modal').length, 0);
   genreReply([{ id: 35, name: 'Gammal genre' }]);
-  movieReply({ results: [movie] });
+  movieReply({ page: 1, total_pages: 1, results: [movie] });
   await app.flush();
   assert.equal(nodes(app.tree, 'FlatList')[0].props.data.length, 0);
+});
+
+function filmPage(page, results = [movie], totalPages = 3) {
+  return { page, total_pages: totalPages, total_results: totalPages * 20, results };
+}
+
+function movieList(app) {
+  return nodes(app.tree, 'FlatList')[0].props.data;
+}
+
+async function searchTitle(app, title = 'Batman') {
+  nodes(app.tree, 'TextInput')[0].props.onChangeText(title);
+  await app.flush();
+  await button(app, 'Sök')();
+  await app.flush();
+}
+
+for (const name of ['HomeScreen', 'SearchScreen']) {
+  test(name + ' börjar på sida ett och lägger till unika filmer i rätt ordning', async () => {
+    const app = screen('screens/' + name);
+    const pages = [];
+    const load = async page => {
+      pages.push(page);
+      if (page === 1) return filmPage(1, [movie, movie, null]);
+      return filmPage(page, [movie, { ...movie, id: 155 }, undefined, { id: -1 }], 2);
+    };
+    app.api.getPopularMovies = load;
+    app.api.searchMovies = (_query, page) => load(page);
+    await app.flush();
+    if (name === 'SearchScreen') await searchTitle(app);
+    assert.deepEqual(pages, [1]);
+    assert.deepEqual(movieList(app).map(item => item.id), [550]);
+    const press = nodes(app.tree, 'Pressable').find(node => text(node).trim() === 'Ladda fler');
+    assert.equal(press.props.accessibilityRole, 'button');
+    assert.equal(press.props.accessibilityState.disabled, false);
+    await press.props.onPress();
+    await app.flush();
+    assert.deepEqual(pages, [1, 2]);
+    assert.deepEqual(movieList(app).map(item => item.id), [550, 155]);
+    assert.equal(nodes(app.tree, 'Pressable').some(node => text(node).trim() === 'Ladda fler'), false);
+  });
+
+  test(name + ' behåller filmer vid laddning och fel, spärrar dubbeltryck och försöker samma sida igen', async () => {
+    const app = screen('screens/' + name);
+    const pages = [];
+    let reject, resolve;
+    const load = page => {
+      pages.push(page);
+      if (page === 1) return Promise.resolve(filmPage(1));
+      return new Promise((success, failure) => { resolve = success; reject = failure; });
+    };
+    app.api.getPopularMovies = load;
+    app.api.searchMovies = (_query, page) => load(page);
+    await app.flush();
+    if (name === 'SearchScreen') await searchTitle(app);
+    const more = button(app, 'Ladda fler');
+    more();
+    more();
+    await app.flush();
+    assert.deepEqual(pages, [1, 2]);
+    assert.equal(movieList(app).length, 1);
+    const footer = nodes(app.tree, 'FlatList')[0].props.ListFooterComponent;
+    assert.equal(nodes(footer, 'ActivityIndicator')[0].props.accessibilityLabel, 'Hämtar fler filmer');
+    assert.equal(nodes(footer, 'Pressable')[0].props.disabled, true);
+    reject(new Error('Tillfälligt nätverksfel'));
+    await app.flush();
+    assert.equal(movieList(app).length, 1);
+    assert.ok(text(nodes(app.tree, 'FlatList')[0].props.ListFooterComponent).includes('Kunde inte ladda fler filmer'));
+    button(app, 'Ladda fler')();
+    resolve(filmPage(2, [{ ...movie, id: 155 }], 2));
+    await app.flush();
+    assert.deepEqual(pages, [1, 2, 2]);
+    assert.deepEqual(movieList(app).map(item => item.id), [550, 155]);
+    assert.equal(text(nodes(app.tree, 'FlatList')[0].props.ListFooterComponent).includes('Tillfälligt'), false);
+  });
+
+  test(name + ' stannar på sida 500 även om TMDB anger fler sidor', async () => {
+    const app = screen('screens/' + name);
+    const pages = [];
+    const load = async page => { pages.push(page); return filmPage(page, [movie], 700); };
+    app.api.getPopularMovies = load;
+    app.api.searchMovies = (_query, page) => load(page);
+    await app.flush();
+    if (name === 'SearchScreen') await searchTitle(app);
+    for (let page = 2; page <= 500; page++) {
+      await button(app, 'Ladda fler')();
+      await app.flush();
+    }
+    assert.equal(pages.length, 500);
+    assert.equal(pages.at(-1), 500);
+    assert.equal(movieList(app).length, 1);
+    assert.equal(nodes(app.tree, 'Pressable').some(node => text(node).trim() === 'Ladda fler'), false);
+  });
+
+  for (const leave of ['blur', 'unmount']) {
+    test(name + ' avbryter nästa sida vid ' + leave + ' och ignorerar sena svar och fel', async () => {
+      for (const fail of [false, true]) {
+        const app = screen('screens/' + name);
+        let signal, resolve, reject;
+        const load = (page, options) => {
+          if (page === 1) return Promise.resolve(filmPage(1));
+          signal = options.signal;
+          return new Promise((success, failure) => { resolve = success; reject = failure; });
+        };
+        app.api.getPopularMovies = load;
+        app.api.searchMovies = (_query, page, options) => load(page, options);
+        await app.flush();
+        if (name === 'SearchScreen') await searchTitle(app);
+        button(app, 'Ladda fler')();
+        await app.flush();
+        if (leave === 'blur') {
+          app.focus(false);
+          await app.flush();
+        } else app.unmount();
+        assert.equal(signal.aborted, true);
+        if (fail) reject(new Error('Gammalt fel'));
+        else resolve(filmPage(2, [{ ...movie, id: 155 }]));
+        await app.flush();
+        assert.deepEqual(movieList(app).map(item => item.id), [550]);
+        assert.equal(text(nodes(app.tree, 'FlatList')[0].props.ListFooterComponent).includes('Gammalt fel'), false);
+        if (leave === 'blur') {
+          app.focus(true);
+          await app.flush();
+          button(app, 'Ladda fler');
+        }
+      }
+    });
+  }
+}
+
+test('Hem har kvar återförsök på första sidan och tomresultat utan Ladda fler', async () => {
+  const app = screen('screens/HomeScreen');
+  app.api.getPopularMovies = async () => { throw new Error('Kunde inte hämta filmer'); };
+  await app.flush();
+  assert.ok(text(app.tree).includes('Kunde inte hämta filmer'));
+  app.api.getPopularMovies = async () => filmPage(1, [], 0);
+  nodes(app.tree, 'Button')[0].props.onPress();
+  await app.flush();
+  assert.equal(movieList(app).length, 0);
+  assert.equal(nodes(app.tree, 'Pressable').length, 0);
+});
+
+test('titelsökning använder listans sökord och ny sökning återställer sida ett', async () => {
+  const app = screen('screens/SearchScreen');
+  const calls = [];
+  app.api.searchMovies = async (query, page) => {
+    calls.push([query, page]);
+    return filmPage(page, [{ ...movie, id: query === 'Batman' ? page : 100 + page }]);
+  };
+  await app.flush();
+  await searchTitle(app);
+  nodes(app.tree, 'TextInput')[0].props.onChangeText('Avatar');
+  await app.flush();
+  await button(app, 'Ladda fler')();
+  await app.flush();
+  assert.deepEqual(calls[1], ['Batman', 2]);
+  await button(app, 'Sök')();
+  await app.flush();
+  assert.deepEqual(calls[2], ['Avatar', 1]);
+  assert.deepEqual(movieList(app).map(item => item.id), [101]);
+  await button(app, 'Ladda fler')();
+  await app.flush();
+  assert.deepEqual(calls[3], ['Avatar', 2]);
+});
+
+test('Discover paginerar med tillämpade filter, ignorerar panelutkast och återställer vid nya filter och genre', async () => {
+  const app = screen('screens/SearchScreen');
+  const calls = [];
+  app.api.discoverMovies = async filters => {
+    calls.push({ ...filters });
+    return filmPage(filters.page || 1, [{ ...movie, id: calls.length }], 5);
+  };
+  await app.flush();
+  button(app, 'Utforska filmer')();
+  await app.flush();
+  button(app, 'Skräck')();
+  await app.advance(300);
+  button(app, 'Filter')();
+  await app.flush();
+  nodes(app.tree, 'TextInput')[0].props.onChangeText('2020');
+  button(app, '7+')();
+  button(app, 'Högst betyg')();
+  await app.flush();
+  button(app, 'Visa filmer')();
+  await app.flush();
+  await button(app, 'Ladda fler')();
+  await app.flush();
+  assert.deepEqual(calls.at(-1), { genre: 27, year: 2020, minRating: 7, sortBy: 'rating', page: 2 });
+  button(app, 'Filter')();
+  await app.flush();
+  nodes(app.tree, 'TextInput')[0].props.onChangeText('2025');
+  button(app, '9+')();
+  button(app, 'Äldsta')();
+  await app.flush();
+  nodes(app.tree, 'Modal')[0].props.onRequestClose();
+  await app.flush();
+  await button(app, 'Ladda fler')();
+  await app.flush();
+  assert.deepEqual(calls.at(-1), { genre: 27, year: 2020, minRating: 7, sortBy: 'rating', page: 3 });
+  button(app, 'Filter')();
+  await app.flush();
+  nodes(app.tree, 'TextInput')[0].props.onChangeText('2021');
+  await app.flush();
+  button(app, 'Visa filmer')();
+  await app.flush();
+  assert.equal(calls.at(-1).page, undefined);
+  assert.equal(calls.at(-1).year, 2021);
+  assert.equal(movieList(app).length, 1);
+  await button(app, 'Ladda fler')();
+  await app.flush();
+  assert.equal(calls.at(-1).page, 2);
+  button(app, 'Action')();
+  await app.advance(300);
+  assert.equal(calls.at(-1).page, undefined);
+  assert.equal(calls.at(-1).genre, 28);
+  assert.equal(calls.at(-1).year, 2021);
+  assert.equal(movieList(app).length, 1);
+});
+
+for (const change of ['mode', 'title', 'genre', 'filters', 'reset']) {
+  test('sena svar och fel från Ladda fler ignoreras efter ' + change, async () => {
+    for (const fail of [false, true]) {
+      const app = screen('screens/SearchScreen');
+      const discover = ['genre', 'filters', 'reset'].includes(change);
+      let signal, resolve, reject;
+      const load = (page, options) => {
+        if (page === 1) return Promise.resolve(filmPage(1));
+        signal = options.signal;
+        return new Promise((success, failure) => { resolve = success; reject = failure; });
+      };
+      app.api.searchMovies = (_query, page, options) => load(page, options);
+      app.api.discoverMovies = (filters, options) => load(filters.page || 1, options);
+      await app.flush();
+      if (discover) {
+        button(app, 'Utforska filmer')();
+        await app.flush();
+        button(app, 'Skräck')();
+        await app.advance(300);
+      } else await searchTitle(app);
+      button(app, 'Ladda fler')();
+      await app.flush();
+      if (change === 'mode') {
+        button(app, 'Utforska filmer')();
+      } else if (change === 'title') {
+        await searchTitle(app, 'Avatar');
+      } else if (change === 'genre') {
+        button(app, 'Action')();
+        await app.advance(300);
+      } else {
+        button(app, 'Filter')();
+        await app.flush();
+        if (change === 'reset') button(app, 'Rensa filter')();
+        else {
+          nodes(app.tree, 'TextInput')[0].props.onChangeText('2020');
+          await app.flush();
+          button(app, 'Visa filmer')();
+        }
+      }
+      await app.flush();
+      assert.equal(signal.aborted, true);
+      if (fail) reject(new Error('Gammalt fel'));
+      else resolve(filmPage(2, [{ ...movie, id: 999 }]));
+      await app.flush();
+      assert.equal(movieList(app).some(item => item.id === 999), false);
+      assert.equal(text(nodes(app.tree, 'FlatList')[0].props.ListFooterComponent).includes('Gammalt fel'), false);
+    }
+  });
+}
+
+
+test('Discover behåller listan vid fel och dubbeltryck, försöker samma sida och döljer knappen efter sista sidan', async () => {
+  const app = screen('screens/SearchScreen');
+  const pages = [];
+  let resolve, reject;
+  app.api.discoverMovies = filters => {
+    const page = filters.page || 1;
+    pages.push(page);
+    if (page === 1) return Promise.resolve(filmPage(1, [movie], 2));
+    return new Promise((success, failure) => { resolve = success; reject = failure; });
+  };
+  await app.flush();
+  button(app, 'Utforska filmer')();
+  await app.flush();
+  button(app, 'Alla')();
+  await app.advance(300);
+  const more = button(app, 'Ladda fler');
+  more();
+  more();
+  await app.flush();
+  assert.deepEqual(pages, [1, 2]);
+  assert.equal(movieList(app).length, 1);
+  reject(new Error('Tillfälligt fel'));
+  await app.flush();
+  assert.equal(movieList(app).length, 1);
+  button(app, 'Ladda fler')();
+  resolve(filmPage(2, [{ ...movie, id: 155 }], 2));
+  await app.flush();
+  assert.deepEqual(pages, [1, 2, 2]);
+  assert.deepEqual(movieList(app).map(item => item.id), [550, 155]);
+  assert.equal(nodes(app.tree, 'Pressable').some(node => text(node).trim() === 'Ladda fler'), false);
+});
+
+test('ett ogiltigt svars sidnummer avvisas utan att flytta listan eller sidräknaren', async t => {
+  const previousUrl = process.env.EXPO_PUBLIC_API_URL;
+  process.env.EXPO_PUBLIC_API_URL = 'http://isolated.test/api';
+  let reply = filmPage(1);
+  const pages = [];
+  // Kör även den riktiga API-kontrollen, men ersätter nätverket helt.
+  t.mock.method(globalThis, 'fetch', async url => {
+    pages.push(Number(new URL(url).searchParams.get('page')));
+    return Response.json(reply);
+  });
+  try {
+    const app = screen('screens/HomeScreen');
+    app.api.getPopularMovies = getPopularMovies;
+    await app.flush();
+    reply = filmPage(3, [{ ...movie, id: 999 }]);
+    button(app, 'Ladda fler')();
+    await app.flush();
+    assert.deepEqual(movieList(app).map(item => item.id), [550]);
+    assert.ok(text(nodes(app.tree, 'FlatList')[0].props.ListFooterComponent).includes('ogiltig filmlista'));
+    reply = filmPage(2, [{ ...movie, id: 155 }]);
+    button(app, 'Ladda fler')();
+    await app.flush();
+    assert.deepEqual(pages, [1, 2, 2]);
+    assert.deepEqual(movieList(app).map(item => item.id), [550, 155]);
+  } finally {
+    if (previousUrl === undefined) delete process.env.EXPO_PUBLIC_API_URL;
+    else process.env.EXPO_PUBLIC_API_URL = previousUrl;
+  }
 });

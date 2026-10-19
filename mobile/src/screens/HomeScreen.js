@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Button,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View
 } from 'react-native';
-import { getPopularMovies } from '../services/api';
+import { getPopularMovies, mergeMovies } from '../services/api';
 import MovieCard from '../components/MovieCard';
 import colors from '../styles/colors';
 import fonts from '../styles/fonts';
@@ -20,39 +22,75 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
+  const isFocused = useIsFocused();
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState('');
+  const request = useRef(null);
 
-    // Hämtar den första sidan med populära filmer från vårt API.
-    async function loadMovies() {
+  useEffect(() => {
+    if (isFocused) {
+      if (page === 0) {
+        // Hämtar första sidan och behåller redan laddade filmer vid återkomst.
+        loadMovies(1);
+      }
+    } else {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+    // Avbryter även när en annan skärm öppnas ovanpå startsidan.
+    return () => {
+      request.current?.abort();
+      request.current = null;
+    };
+  }, [isFocused, attempt]);
+
+  async function loadMovies(nextPage) {
+    if (request.current) {
+      return;
+    }
+    const controller = new AbortController();
+    request.current = controller;
+    const more = nextPage > 1;
+    if (more) {
+      setLoadingMore(true);
+      setMoreError('');
+    } else {
       setLoading(true);
       setError('');
-      try {
-        const data = await getPopularMovies(1, { signal: controller.signal });
-
-        if (active) {
-          setMovies(data.results);
-        }
-      } catch (error) {
-        if (active) {
+    }
+    try {
+      const data = await getPopularMovies(nextPage, { signal: controller.signal });
+      if (!controller.signal.aborted) {
+        // Lägger till nästa sida utan att ta bort tidigare filmer.
+        setMovies(current => mergeMovies(more ? current : [], data.results));
+        setPage(data.page);
+        setTotalPages(Math.min(data.total_pages, 500));
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        if (more) {
+          setMoreError('Kunde inte ladda fler filmer. ' + error.message);
+        } else {
           setError(error.message);
         }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+      }
+    } finally {
+      if (request.current === controller) {
+        request.current = null;
+        setLoading(false);
+        setLoadingMore(false);
       }
     }
+  }
 
-    loadMovies();
-
-    // Avbryt både nätverksanropet och framtida state-uppdateringar.
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [attempt]);
+  function loadMore() {
+    if (page < 1 || page >= totalPages) {
+      return;
+    }
+    loadMovies(page + 1);
+  }
 
   if (loading) {
     return (
@@ -95,13 +133,48 @@ export default function HomeScreen() {
           <Text style={[globalStyles.title, styles.title]}>Populära filmer</Text>
         }
         ListEmptyComponent={<Text style={styles.message}>Inga filmer hittades</Text>}
-        ListFooterComponent={<Text style={styles.credit}>Filmdata från TMDB</Text>}
+        ListFooterComponent={
+          <View>
+            {moreError !== '' && (
+              <Text style={styles.message} accessibilityLiveRegion="polite">{moreError}</Text>
+            )}
+            {page > 0 && page < totalPages && (
+              <Pressable
+                style={styles.moreButton}
+                onPress={loadMore}
+                disabled={loadingMore}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: loadingMore, busy: loadingMore }}
+                accessibilityLabel="Ladda fler filmer"
+              >
+                {loadingMore && <ActivityIndicator color={colors.background} accessibilityLabel="Hämtar fler filmer" />}
+                <Text style={styles.moreButtonText}>Ladda fler</Text>
+              </Pressable>
+            )}
+            <Text style={styles.credit}>Filmdata från TMDB</Text>
+          </View>
+        }
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  moreButton: {
+    minHeight: 48,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  moreButtonText: {
+    color: colors.background,
+    fontSize: fonts.sizes.normal,
+    fontWeight: fonts.weights.bold,
+  },
+
   list: {
     padding: 16,
     width: '100%',

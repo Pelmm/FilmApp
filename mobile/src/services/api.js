@@ -140,20 +140,67 @@ export async function getHealth(options) {
   return data;
 }
 
-function checkMovieList(data) {
-  if (!Array.isArray(data?.results)) {
+function checkPage(page) {
+  if (!Number.isInteger(page) || page < 1 || page > 500) {
+    throw new Error('Sidnumret måste vara ett heltal mellan 1 och 500.');
+  }
+}
+
+function checkMovieList(data, page) {
+  if (
+    !Array.isArray(data?.results) ||
+    data.page !== page ||
+    !Number.isSafeInteger(data.total_pages) ||
+    data.total_pages < 0
+  ) {
+    throw new Error('Servern skickade en ogiltig filmlista.');
+  }
+  if (data.total_results !== undefined) {
+    if (!Number.isSafeInteger(data.total_results) || data.total_results < 0) {
+      throw new Error('Servern skickade en ogiltig filmlista.');
+    }
+  }
+  if (data.total_pages === 0) {
+    if (page !== 1 || data.results.length > 0) {
+      throw new Error('Servern skickade en ogiltig filmlista.');
+    }
+  } else if (page > data.total_pages) {
     throw new Error('Servern skickade en ogiltig filmlista.');
   }
   return data;
 }
 
+// Hindrar samma film från att visas flera gånger och hoppar över trasiga filmobjekt.
+export function mergeMovies(previousMovies, newMovies) {
+  const movies = [];
+  const ids = new Set();
+  for (const movie of [...previousMovies, ...newMovies]) {
+    if (!Number.isSafeInteger(movie?.id) || movie.id < 1) {
+      continue;
+    }
+    if (typeof movie.title !== 'string' || typeof movie.release_date !== 'string') {
+      continue;
+    }
+    if (movie.vote_average !== null && !Number.isFinite(movie.vote_average)) {
+      continue;
+    }
+    if (!ids.has(movie.id)) {
+      ids.add(movie.id);
+      movies.push(movie);
+    }
+  }
+  return movies;
+}
+
 export async function getPopularMovies(page = 1, options) {
+  checkPage(page);
   const data = await getJson(`movies/popular?page=${encodeURIComponent(page)}`, options);
 
-  return checkMovieList(data);
+  return checkMovieList(data, page);
 }
 
 export async function searchMovies(query, page = 1, options) {
+  checkPage(page);
   if (
     typeof query !== 'string' ||
     !query.trim()
@@ -167,7 +214,7 @@ export async function searchMovies(query, page = 1, options) {
     options
   );
 
-  return checkMovieList(data);
+  return checkMovieList(data, page);
 }
 
 // Backend skickar genrelistan direkt som en array med ID och namn.
@@ -179,9 +226,10 @@ export async function getMovieGenres(options) {
   return data;
 }
 
-// Skickar bara valda filter. Utforska hämtar än så länge endast sida 1.
-export async function discoverMovies({ genre, year, minRating, sortBy = 'popular' } = {}, options) {
-  const params = ['page=1', `sortBy=${encodeURIComponent(sortBy)}`];
+// Skickar valda filter och sidnummer till samma Discover-endpoint.
+export async function discoverMovies({ genre, year, minRating, sortBy = 'popular', page = 1 } = {}, options) {
+  checkPage(page);
+  const params = [`page=${page}`, `sortBy=${encodeURIComponent(sortBy)}`];
   if (genre !== undefined) {
     params.push(`genre=${encodeURIComponent(genre)}`);
   }
@@ -192,7 +240,7 @@ export async function discoverMovies({ genre, year, minRating, sortBy = 'popular
     params.push(`minRating=${encodeURIComponent(minRating)}`);
   }
   const data = await getJson(`movies/discover?${params.join('&')}`, options);
-  return checkMovieList(data);
+  return checkMovieList(data, page);
 }
 
 export async function getMovieDetails(id, options) {

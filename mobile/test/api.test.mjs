@@ -4,7 +4,7 @@ import test, { afterEach, beforeEach } from 'node:test';
 import app from '../../server/src/app.js';
 import {
   getApiUrl, getHealth, getPopularMovies, searchMovies, getMovieDetails,
-  getMovieGenres, discoverMovies,
+  getMovieGenres, discoverMovies, mergeMovies,
 } from '../src/services/api.js';
 
 const originalApiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -300,7 +300,7 @@ test('Discover utan filter skickar bara standardvärden och bevarar backendens f
   assert.deepEqual(await discoverMovies(), data);
 });
 
-test('Discover skickar genre, år, betyg och sortering men ingen söktext eller senare sida', async (t) => {
+test('Discover skickar genre, år, betyg, sortering och vald sida men ingen söktext', async (t) => {
   t.mock.method(globalThis, 'fetch', async url => {
     const params = new URL(url).searchParams;
     assert.equal(params.size, 5);
@@ -308,9 +308,9 @@ test('Discover skickar genre, år, betyg och sortering men ingen söktext eller 
     assert.equal(params.get('year'), '2020');
     assert.equal(params.get('minRating'), '7');
     assert.equal(params.get('sortBy'), 'rating');
-    assert.equal(params.get('page'), '1');
+    assert.equal(params.get('page'), '4');
     assert.equal(params.has('query'), false);
-    return Response.json({ results: [], page: 1, total_pages: 0, total_results: 0 });
+    return Response.json({ results: [], page: 4, total_pages: 5, total_results: 0 });
   });
   await discoverMovies({ genre: 27, year: 2020, minRating: 7, sortBy: 'rating', query: 'Batman', page: 4 });
 });
@@ -321,7 +321,7 @@ test('Discover kan skicka ett enskilt filter och kodar specialtecken', async (t)
     assert.equal(params.get('genre'), '27');
     assert.equal(params.has('year'), false);
     assert.equal(params.has('minRating'), false);
-    return Response.json({ results: [] });
+    return Response.json({ results: [], page: 1, total_pages: 0 });
   });
   await discoverMovies({ genre: 27 });
   mock.mock.mockImplementation(async url => {
@@ -329,7 +329,7 @@ test('Discover kan skicka ett enskilt filter och kodar specialtecken', async (t)
     assert.equal(params.get('sortBy'), 'bad&query=Batman');
     assert.equal(params.has('query'), false);
     assert.equal(params.get('minRating'), '0');
-    return Response.json({ results: [] });
+    return Response.json({ results: [], page: 1, total_pages: 0 });
   });
   await discoverMovies({ sortBy: 'bad&query=Batman', minRating: 0 });
 });
@@ -356,4 +356,77 @@ test('genre- och Discover-anrop hanterar nätverksfel, timeout och avbrytning', 
     controller.abort();
     await assert.rejects(pending, { name: 'AbortError' });
   }
+});
+
+
+test('alla filmlistor avvisar ogiltiga sidnummer före nätverksanropet', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch');
+  const loads = [page => getPopularMovies(page), page => searchMovies('Batman', page), page => discoverMovies({ page })];
+  for (const load of loads) {
+    for (const page of [0, -1, 501, 1.5, NaN, Infinity, null, '2']) {
+      await assert.rejects(load(page), { message: 'Sidnumret måste vara ett heltal mellan 1 och 500.' });
+    }
+  }
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('alla filmlistor kräver rätt svarssida och giltigt sidantal innan svaret används', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch');
+  const loads = [() => getPopularMovies(2), () => searchMovies('Batman', 2), () => discoverMovies({ page: 2 })];
+  const valid = { page: 2, total_pages: 3, results: [] };
+  const invalid = [
+    null, {}, { ...valid, results: null }, { ...valid, page: 1 }, { ...valid, page: '2' },
+    { ...valid, total_pages: undefined }, { ...valid, total_pages: '3' },
+    { ...valid, total_pages: -1 }, { ...valid, total_pages: 2.5 },
+    { ...valid, total_pages: 0 }, { ...valid, total_pages: 1 },
+    { ...valid, total_results: -1 }, { ...valid, total_results: '40' },
+  ];
+  for (const load of loads) {
+    for (const data of invalid) {
+      fetchMock.mock.mockImplementation(async () => Response.json(data));
+      await assert.rejects(load(), { message: 'Servern skickade en ogiltig filmlista.' });
+    }
+    fetchMock.mock.mockImplementation(async () => Response.json(valid));
+    assert.deepEqual(await load(), valid);
+  }
+});
+
+test('sida 500 skickas till rätt endpoint och TMDB:s större sidantal bevaras', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async url => {
+    const params = new URL(url).searchParams;
+    assert.equal(params.get('page'), '500');
+    return Response.json({ page: 500, total_pages: 900, total_results: 18000, results: [] });
+  });
+  const controller = new AbortController();
+  await getPopularMovies(500);
+  await searchMovies('Batman', 500);
+  await discoverMovies({ genre: 27, year: 2020, minRating: 7, sortBy: 'rating', page: 500 }, { signal: controller.signal });
+  assert.equal(fetchMock.mock.callCount(), 3);
+  const params = new URL(fetchMock.mock.calls[2].arguments[0]).searchParams;
+  assert.equal(params.get('genre'), '27');
+  assert.equal(params.get('year'), '2020');
+  assert.equal(params.get('minRating'), '7');
+  assert.equal(params.get('sortBy'), 'rating');
+});
+
+test('sidantal noll är bara giltigt för en tom första sida', async t => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => Response.json({ page: 1, total_pages: 0, results: [] }));
+  assert.equal((await getPopularMovies()).results.length, 0);
+  fetchMock.mock.mockImplementation(async () => Response.json({ page: 1, total_pages: 0, results: [{ id: 1 }] }));
+  await assert.rejects(getPopularMovies(), { message: 'Servern skickade en ogiltig filmlista.' });
+});
+
+test('filmlistor slås ihop utan dubbletter, krasch eller ändringar i ursprungslistan', () => {
+  const movie = { id: 1, title: 'Film', release_date: '', poster_path: null, vote_average: null };
+  const previous = [movie];
+  const next = [
+    movie, { ...movie, id: 2 }, { ...movie, id: 2 }, null, undefined, 'film', {},
+    { ...movie, id: 0 }, { ...movie, id: '3' }, { ...movie, id: 1.5 },
+    { ...movie, id: 4, title: {} }, { ...movie, id: 5, release_date: 2020 },
+    { ...movie, id: 6, vote_average: '8' }, { ...movie, id: 7, vote_average: Infinity },
+    { ...movie, id: 8, vote_average: 7 },
+  ];
+  assert.deepEqual(mergeMovies(previous, next).map(item => item.id), [1, 2, 8]);
+  assert.deepEqual(previous, [movie]);
+  assert.equal(next.length, 15);
 });
